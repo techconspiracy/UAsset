@@ -16,7 +16,14 @@ public enum ItemRarity { Common, Uncommon, Rare, Epic, Legendary }
 public enum WeaponType { Sword, Axe, Mace, Dagger, Staff, Bow }
 
 [System.Serializable]
-public enum ArmorType { Head, Chest, Legs, Hands, Feet }
+public enum ArmorType { 
+    Helmet,
+    Chestplate,
+    Leggings,
+    Gloves,
+    Boots,
+    Shield
+}
 
 [System.Serializable]
 public class ItemStats
@@ -211,11 +218,12 @@ public Weapon GenerateWeapon(int playerLevel)
         // Generate name
         string baseName = armor.armorType switch
         {
-            ArmorType.Head => "Helmet",
-            ArmorType.Chest => "Chestplate",
-            ArmorType.Legs => "Leggings",
-            ArmorType.Hands => "Gauntlets",
-            ArmorType.Feet => "Boots",
+            ArmorType.Helmet => "Helmet",
+            ArmorType.Chestplate => "Chestplate",
+            ArmorType.Leggings => "Leggings",
+            ArmorType.Gloves => "Gauntlets",
+            ArmorType.Boots => "Boots",
+            ArmorType.Shield => "Shield",
             _ => "Armor"
         };
         
@@ -243,7 +251,7 @@ public Weapon GenerateWeapon(int playerLevel)
         armor.stats.armor = (5 + armor.level * 3) * rarityMultiplier;
         armor.stats.health = (20 + armor.level * 10) * rarityMultiplier;
         
-        // Generate icon
+        // Generate icon.
         ProceduralIconGenerator iconGen = GetComponent<ProceduralIconGenerator>();
         if (iconGen != null)
         {

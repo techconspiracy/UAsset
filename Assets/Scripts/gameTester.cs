@@ -1,8 +1,9 @@
-// GameTester.cs - Enhanced Debug Tool
-// Attach to Player - helps test and debug all systems
-// Shows on-screen debug info and test buttons
+// GameTester.cs - Enhanced Debug Tool with Tabbed Interface
+// Attach to Player - comprehensive testing for ALL game systems
+// Press F1 to toggle | Use tabs to navigate different test sections
 
 using UnityEngine;
+using System.Collections.Generic;
 
 public class GameTester : MonoBehaviour
 {
@@ -10,7 +11,27 @@ public class GameTester : MonoBehaviour
     [SerializeField] private bool showDebugUI = true;
     [SerializeField] private KeyCode toggleDebugKey = KeyCode.F1;
     
-    private bool showWeaponDebug = true;
+    [Header("Enemy Spawning")]
+    [SerializeField] private GameObject enemyPrefab;
+    [SerializeField] private float spawnDistance = 5f;
+    
+    private enum DebugTab
+    {
+        Overview,
+        Inventory,
+        Combat,
+        Experience,
+        Weapons,
+        Armor,
+        Enemies,
+        Projectiles
+    }
+    
+    private DebugTab currentTab = DebugTab.Overview;
+    private Vector2 scrollPosition = Vector2.zero;
+    private GUIStyle headerStyle;
+    private GUIStyle tabButtonStyle;
+    private GUIStyle activeTabStyle;
     
     void Update()
     {
@@ -24,54 +45,231 @@ public class GameTester : MonoBehaviour
     {
         if (!showDebugUI) return;
         
-        GUILayout.BeginArea(new Rect(10, 10, 400, Screen.height - 20));
+        InitStyles();
+        
+        // Main debug window
+        GUILayout.BeginArea(new Rect(10, 10, 450, Screen.height - 20));
         GUILayout.BeginVertical("box");
         
-        GUILayout.Label("=== GAME TESTER ===", GUI.skin.box);
-        GUILayout.Label($"Press {toggleDebugKey} to toggle this window");
-        GUILayout.Space(10);
+        // Header
+        GUILayout.Label("=== GAME TESTER ===", headerStyle);
+        GUILayout.Label($"Press {toggleDebugKey} to toggle | FPS: {(int)(1f / Time.deltaTime)}");
         
-        // Inventory Section
-        DrawInventoryDebug();
-        GUILayout.Space(10);
+        // Tab buttons
+        DrawTabButtons();
         
-        // Collectibles Section
-        DrawCollectiblesDebug();
-        GUILayout.Space(10);
+        GUILayout.Space(5);
         
-        // Stats Section
-        DrawStatsDebug();
-        GUILayout.Space(10);
+        // Scrollable content area
+        scrollPosition = GUILayout.BeginScrollView(scrollPosition, GUILayout.Height(Screen.height - 120));
         
-        // Weapon Model Section
-        DrawWeaponModelDebug();
+        // Draw content based on selected tab
+        switch (currentTab)
+        {
+            case DebugTab.Overview:
+                DrawOverviewTab();
+                break;
+            case DebugTab.Inventory:
+                DrawInventoryTab();
+                break;
+            case DebugTab.Combat:
+                DrawCombatTab();
+                break;
+            case DebugTab.Experience:
+                DrawExperienceTab();
+                break;
+            case DebugTab.Weapons:
+                DrawWeaponsTab();
+                break;
+            case DebugTab.Armor:
+                DrawArmorTab();
+                break;
+            case DebugTab.Enemies:
+                DrawEnemiesTab();
+                break;
+            case DebugTab.Projectiles:
+                DrawProjectilesTab();
+                break;
+        }
+        
+        GUILayout.EndScrollView();
         
         GUILayout.EndVertical();
         GUILayout.EndArea();
     }
     
-    void DrawInventoryDebug()
+    void InitStyles()
     {
-        GUILayout.Label("--- INVENTORY ---", GUI.skin.box);
+        if (headerStyle == null)
+        {
+            headerStyle = new GUIStyle(GUI.skin.box);
+            headerStyle.fontSize = 16;
+            headerStyle.fontStyle = FontStyle.Bold;
+            headerStyle.alignment = TextAnchor.MiddleCenter;
+        }
+        
+        if (tabButtonStyle == null)
+        {
+            tabButtonStyle = new GUIStyle(GUI.skin.button);
+            tabButtonStyle.fontSize = 11;
+            tabButtonStyle.padding = new RectOffset(8, 8, 4, 4);
+        }
+        
+        if (activeTabStyle == null)
+        {
+            activeTabStyle = new GUIStyle(tabButtonStyle);
+            activeTabStyle.normal.background = tabButtonStyle.active.background;
+        }
+    }
+    
+    void DrawTabButtons()
+    {
+        GUILayout.BeginHorizontal();
+        
+        if (TabButton("Overview", DebugTab.Overview)) currentTab = DebugTab.Overview;
+        if (TabButton("Inventory", DebugTab.Inventory)) currentTab = DebugTab.Inventory;
+        if (TabButton("Combat", DebugTab.Combat)) currentTab = DebugTab.Combat;
+        if (TabButton("XP", DebugTab.Experience)) currentTab = DebugTab.Experience;
+        
+        GUILayout.EndHorizontal();
+        GUILayout.BeginHorizontal();
+        
+        if (TabButton("Weapons", DebugTab.Weapons)) currentTab = DebugTab.Weapons;
+        if (TabButton("Armor", DebugTab.Armor)) currentTab = DebugTab.Armor;
+        if (TabButton("Enemies", DebugTab.Enemies)) currentTab = DebugTab.Enemies;
+        if (TabButton("Projectiles", DebugTab.Projectiles)) currentTab = DebugTab.Projectiles;
+        
+        GUILayout.EndHorizontal();
+    }
+    
+    bool TabButton(string label, DebugTab tab)
+    {
+        GUIStyle style = currentTab == tab ? activeTabStyle : tabButtonStyle;
+        return GUILayout.Button(label, style);
+    }
+    
+    // ==================== TAB CONTENTS ====================
+    
+    void DrawOverviewTab()
+    {
+        GUILayout.Label("--- SYSTEM STATUS ---", GUI.skin.box);
+        
+        // Check all critical components
+        CheckComponent<PlayerStats>("PlayerStats");
+        CheckComponent<InventoryManager>("InventoryManager");
+        CheckComponent<ExperienceManager>("ExperienceManager");
+        CheckComponent<ThirdPersonController>("ThirdPersonController");
+        CheckComponent<CombatAnimationController>("CombatAnimationController");
+        CheckComponent<RangedWeaponHandler>("RangedWeaponHandler");
+        
+        GUILayout.Space(10);
+        
+        GUILayout.Label("--- SCENE MANAGERS ---", GUI.skin.box);
+        CheckSceneComponent<makeItems>("makeItems (Item Generator)");
+        CheckSceneComponent<ProceduralWeaponModels>("ProceduralWeaponModels");
+        CheckSceneComponent<ProceduralArmorModels>("ProceduralArmorModels");
+        CheckSceneComponent<ProjectileSystem>("ProjectileSystem");
+        
+        GUILayout.Space(10);
+        
+        // Quick stats
+        PlayerStats stats = GetComponent<PlayerStats>();
+        if (stats != null)
+        {
+            GUILayout.Label("--- QUICK STATS ---", GUI.skin.box);
+            GUILayout.Label($"Health: {stats.GetCurrentHealth():F0} / {stats.GetMaxHealth():F0}");
+            GUILayout.Label($"Level: {stats.GetLevel()}");
+            GUILayout.Label($"Damage: {stats.GetTotalDamage():F0}");
+            GUILayout.Label($"Armor: {stats.GetTotalArmor():F0}");
+        }
+        
+        GUILayout.Space(10);
+        
+        if (GUILayout.Button("Run Full System Check", GUILayout.Height(30)))
+        {
+            RunFullSystemCheck();
+        }
+    }
+    
+    void DrawInventoryTab()
+    {
+        GUILayout.Label("--- INVENTORY MANAGEMENT ---", GUI.skin.box);
         
         InventoryManager inv = GetComponent<InventoryManager>();
         if (inv != null)
         {
             GUILayout.Label($"Items: {inv.GetItemCount()} / {inv.GetMaxSlots()}");
             
-            if (GUILayout.Button("Add Test Weapon"))
+            GUILayout.Space(5);
+            
+            if (GUILayout.Button("Add Random Weapon"))
             {
-                AddTestWeapon();
+                AddRandomItem(ItemType.Weapon);
             }
             
-            if (GUILayout.Button("Add Test Armor"))
+            if (GUILayout.Button("Add Random Armor"))
             {
-                AddTestArmor();
+                AddRandomItem(ItemType.Armor);
             }
             
-            if (GUILayout.Button("Clear Inventory"))
+            if (GUILayout.Button("Add 5 Random Items"))
+            {
+                for (int i = 0; i < 5; i++)
+                {
+                    AddRandomItem(Random.value > 0.5f ? ItemType.Weapon : ItemType.Armor);
+                }
+            }
+            
+            GUILayout.Space(10);
+            
+            GUILayout.Label("--- RARITY TESTING ---", GUI.skin.box);
+            
+            if (GUILayout.Button("Add Common Weapon"))
+            {
+                AddWeaponOfRarity(ItemRarity.Common);
+            }
+            
+            if (GUILayout.Button("Add Rare Weapon"))
+            {
+                AddWeaponOfRarity(ItemRarity.Rare);
+            }
+            
+            if (GUILayout.Button("Add Legendary Weapon"))
+            {
+                AddWeaponOfRarity(ItemRarity.Legendary);
+            }
+            
+            GUILayout.Space(10);
+            
+            if (GUILayout.Button("Clear Inventory", GUILayout.Height(25)))
             {
                 ClearInventory();
+            }
+            
+            GUILayout.Space(10);
+            
+            // List current items
+            GUILayout.Label("--- CURRENT ITEMS ---", GUI.skin.box);
+            var items = inv.GetAllItems();
+            if (items.Count == 0)
+            {
+                GUILayout.Label("(Empty)");
+            }
+            else
+            {
+                foreach (var item in items)
+                {
+                    string itemInfo = $"{item.rarity} {item.itemName}";
+                    if (item is Weapon weapon)
+                    {
+                        itemInfo += $" ({weapon.weaponType}, {weapon.stats.damage:F0} dmg)";
+                    }
+                    else if (item is Armor armor)
+                    {
+                        itemInfo += $" ({armor.armorType}, {armor.stats.armor:F0} arm)";
+                    }
+                    GUILayout.Label(itemInfo);
+                }
             }
         }
         else
@@ -80,103 +278,24 @@ public class GameTester : MonoBehaviour
         }
     }
     
-    void DrawCollectiblesDebug()
+    void DrawCombatTab()
     {
-        GUILayout.Label("--- COLLECTIBLES ---", GUI.skin.box);
-        
-        CollectibleManager col = GetComponent<CollectibleManager>();
-        if (col != null)
-        {
-            GUILayout.Label($"Collected: {col.GetTotalCollected()}");
-        }
-        else
-        {
-            GUILayout.Label("No CollectibleManager");
-        }
-    }
-    
-    void DrawStatsDebug()
-    {
-        GUILayout.Label("--- PLAYER STATS ---", GUI.skin.box);
+        GUILayout.Label("--- COMBAT SYSTEMS ---", GUI.skin.box);
         
         PlayerStats stats = GetComponent<PlayerStats>();
         if (stats != null)
         {
-            GUILayout.Label($"Health: {stats.GetCurrentHealth():F0} / {stats.GetMaxHealth():F0}");
-            GUILayout.Label($"Damage: {stats.GetTotalDamage():F0}");
+            GUILayout.Label($"Total Damage: {stats.GetTotalDamage():F0}");
+            GUILayout.Label($"Crit Chance: {stats.GetCritChance():F1}%");
             GUILayout.Label($"Armor: {stats.GetTotalArmor():F0}");
-            GUILayout.Label($"Crit: {stats.GetCritChance():F1}%");
+            GUILayout.Label($"Damage Reduction: {Mathf.Min(stats.GetTotalArmor() / 100f, 0.75f) * 100f:F0}%");
             
             Weapon equipped = stats.GetEquippedWeapon();
             if (equipped != null)
             {
                 GUILayout.Label($"Weapon: {equipped.itemName}");
-            }
-            else
-            {
-                GUILayout.Label("No weapon equipped");
-            }
-        }
-    }
-    
-    void DrawWeaponModelDebug()
-    {
-        GUILayout.Label("--- WEAPON MODEL DEBUG ---", GUI.skin.box);
-        
-        showWeaponDebug = GUILayout.Toggle(showWeaponDebug, "Show Details");
-        
-        if (!showWeaponDebug) return;
-        
-        // Check for components
-        makeItems itemGen = FindFirstObjectByType<makeItems>();
-        ProceduralWeaponModels modelGen = FindFirstObjectByType<ProceduralWeaponModels>();
-        PlayerWeaponHandler weaponHandler = GetComponent<PlayerWeaponHandler>();
-        PlayerStats stats = GetComponent<PlayerStats>();
-        
-        GUILayout.Label("Component Status:");
-        GUILayout.Label($"  ItemGenerator: {(itemGen != null ? "✓" : "✗ MISSING")}");
-        GUILayout.Label($"  ModelGenerator: {(modelGen != null ? "✓" : "✗ MISSING")}");
-        GUILayout.Label($"  WeaponHandler: {(weaponHandler != null ? "✓" : "✗ MISSING")}");
-        GUILayout.Label($"  PlayerStats: {(stats != null ? "✓" : "✗ MISSING")}");
-        
-        GUILayout.Space(5);
-        
-        // Check equipped weapon
-        if (stats != null)
-        {
-            Weapon equipped = stats.GetEquippedWeapon();
-            
-            if (equipped != null)
-            {
-                GUILayout.Label($"Equipped Weapon: {equipped.itemName}");
-                GUILayout.Label($"  Type: {equipped.weaponType}");
-                GUILayout.Label($"  Rarity: {equipped.rarity}");
-                GUILayout.Label($"  Has Model: {(equipped.weaponModel != null ? "✓" : "✗")}");
-                
-                if (equipped.weaponModel != null)
-                {
-                    GUILayout.Label($"  Model Active: {equipped.weaponModel.activeSelf}");
-                    GUILayout.Label($"  Model Parent: {equipped.weaponModel.transform.parent?.name ?? "None"}");
-                    GUILayout.Label($"  Model Pos: {equipped.weaponModel.transform.position}");
-                    GUILayout.Label($"  Child Count: {equipped.weaponModel.transform.childCount}");
-                }
-                else
-                {
-                    GUILayout.Label("  ERROR: Weapon has no model!", GUI.skin.box);
-                    
-                    if (GUILayout.Button("Generate Model Now"))
-                    {
-                        if (modelGen != null)
-                        {
-                            equipped.weaponModel = modelGen.GenerateWeaponModel(equipped);
-                            if (weaponHandler != null)
-                            {
-                                weaponHandler.UpdateEquippedWeapon();
-                            }
-                            //Debug.Log($"Generated model for {equipped.itemName}");
-                        }
-                    }
-                }
+                GUILayout.Label($"Type: {equipped.weaponType}");
+                GUILayout.Label($"Base Damage: {equipped.stats.damage:F0}");
             }
             else
             {
@@ -184,107 +303,457 @@ public class GameTester : MonoBehaviour
             }
         }
         
-        GUILayout.Space(5);
+        GUILayout.Space(10);
         
-        // Check hand transforms
-        if (weaponHandler != null)
+        GUILayout.Label("--- COMBAT TESTING ---", GUI.skin.box);
+        
+        if (GUILayout.Button("Take 20 Damage"))
         {
-            Transform rightHand = weaponHandler.GetType().GetField("rightHandTransform", 
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                ?.GetValue(weaponHandler) as Transform;
-            
-            if (rightHand != null)
-            {
-                GUILayout.Label($"Right Hand: {rightHand.name}");
-                GUILayout.Label($"  Position: {rightHand.position}");
-                GUILayout.Label($"  Children: {rightHand.childCount}");
-            }
-            else
-            {
-                GUILayout.Label("ERROR: No right hand transform!", GUI.skin.box);
-            }
+            stats?.TakeDamage(20f, false);
         }
         
-        GUILayout.Space(5);
-        
-        // Test buttons
-        if (GUILayout.Button("Force Weapon Update"))
+        if (GUILayout.Button("Take 50 Damage (Crit)"))
         {
-            if (weaponHandler != null)
-            {
-                weaponHandler.UpdateEquippedWeapon();
-                //Debug.Log("Forced weapon update");
-            }
+            stats?.TakeDamage(50f, true);
         }
         
-        if (GUILayout.Button("Generate & Equip Test Sword"))
+        if (GUILayout.Button("Heal to Full"))
         {
-            GenerateAndEquipTestWeapon(WeaponType.Sword);
+            stats?.Heal(9999f);
         }
         
-        if (GUILayout.Button("Generate & Equip Test Staff"))
-        {
-            GenerateAndEquipTestWeapon(WeaponType.Staff);
-        }
+        GUILayout.Space(10);
         
-        if (GUILayout.Button("List All Weapon Models in Scene"))
+        // Animation controller status
+        CombatAnimationController combat = GetComponent<CombatAnimationController>();
+        if (combat != null)
         {
-            ListWeaponModelsInScene();
-        }
-    }
-    
-    void AddTestWeapon()
-    {
-        var gen = FindFirstObjectByType<makeItems>();
-        var inv = GetComponent<InventoryManager>();
-        
-        if (gen != null && inv != null)
-        {
-            Weapon weapon = gen.GenerateWeapon(GetComponent<PlayerStats>()?.GetLevel() ?? 1);
-            
-            // Check if model was generated
-            if (weapon.weaponModel == null)
-            {
-                //Debug.LogWarning($"Generated weapon {weapon.itemName} has NO MODEL!");
-                
-                // Try to generate it
-                var modelGen = FindFirstObjectByType<ProceduralWeaponModels>();
-                if (modelGen != null)
-                {
-                    weapon.weaponModel = modelGen.GenerateWeaponModel(weapon);
-                    //Debug.Log($"Manually generated model for {weapon.itemName}");
-                }
-                else
-                {
-                    //Debug.LogError("ProceduralWeaponModels not found in scene!");
-                }
-            }
-            
-            inv.AddItem(weapon);
-            //Debug.Log($"Added weapon: {weapon.itemName} (Type: {weapon.weaponType}, Has Model: {weapon.weaponModel != null})");
+            GUILayout.Label("Combat Animation: Active");
+            GUILayout.Label($"Is Attacking: {combat.IsAttacking()}");
+            GUILayout.Label($"Weapon Type: {combat.GetCurrentWeaponType()}");
         }
         else
         {
-            //Debug.LogError($"Missing: Generator={gen != null}, Inventory={inv != null}");
+            GUILayout.Label("ERROR: No CombatAnimationController!");
         }
     }
     
-    void AddTestArmor()
+    void DrawExperienceTab()
     {
-        var gen = FindFirstObjectByType<makeItems>();
-        var inv = GetComponent<InventoryManager>();
+        GUILayout.Label("--- EXPERIENCE & LEVELING ---", GUI.skin.box);
         
-        if (gen != null && inv != null)
+        ExperienceManager exp = GetComponent<ExperienceManager>();
+        PlayerStats stats = GetComponent<PlayerStats>();
+        
+        if (exp != null && stats != null)
         {
-            Armor armor = gen.GenerateArmor(GetComponent<PlayerStats>()?.GetLevel() ?? 1);
-            inv.AddItem(armor);
-            //Debug.Log($"Added armor: {armor.itemName}");
+            GUILayout.Label($"Current Level: {exp.GetCurrentLevel()}");
+            GUILayout.Label($"Current XP: {exp.GetCurrentExp()} / {exp.GetExpToNextLevel()}");
+            GUILayout.Label($"Progress: {exp.GetLevelProgress() * 100f:F1}%");
+            
+            GUILayout.Space(10);
+            
+            if (GUILayout.Button("Gain 50 XP"))
+            {
+                exp.GainExperience(50);
+            }
+            
+            if (GUILayout.Button("Gain 200 XP"))
+            {
+                exp.GainExperience(200);
+            }
+            
+            if (GUILayout.Button("Gain 1000 XP (Level Up!)"))
+            {
+                exp.GainExperience(1000);
+            }
+            
+            GUILayout.Space(10);
+            
+            GUILayout.Label("--- LEVEL CURVE INFO ---", GUI.skin.box);
+            
+            int currentLevel = exp.GetCurrentLevel();
+            for (int i = 0; i < 5 && (currentLevel + i) <= 10; i++)
+            {
+                int level = currentLevel + i;
+                int xpRequired = Mathf.RoundToInt(100 * Mathf.Pow(level, 1.5f));
+                GUILayout.Label($"Level {level} → {level + 1}: {xpRequired} XP");
+            }
+        }
+        else
+        {
+            if (exp == null) GUILayout.Label("ERROR: No ExperienceManager!");
+            if (stats == null) GUILayout.Label("ERROR: No PlayerStats!");
+        }
+    }
+    
+    void DrawWeaponsTab()
+    {
+        GUILayout.Label("--- WEAPON SYSTEMS ---", GUI.skin.box);
+        
+        PlayerStats stats = GetComponent<PlayerStats>();
+        Weapon equipped = stats?.GetEquippedWeapon();
+        
+        if (equipped != null)
+        {
+            GUILayout.Label($"Equipped: {equipped.itemName}");
+            GUILayout.Label($"Type: {equipped.weaponType}");
+            GUILayout.Label($"Rarity: {equipped.rarity}");
+            GUILayout.Label($"Damage: {equipped.stats.damage:F0}");
+            GUILayout.Label($"Crit Chance: {equipped.stats.critChance:F1}%");
+            GUILayout.Label($"Has Model: {(equipped.weaponModel != null ? "✓" : "✗")}");
+            
+            if (equipped.weaponModel != null)
+            {
+                GUILayout.Label($"Model Active: {equipped.weaponModel.activeSelf}");
+                GUILayout.Label($"Children: {equipped.weaponModel.transform.childCount}");
+            }
+        }
+        else
+        {
+            GUILayout.Label("No weapon equipped");
+        }
+        
+        GUILayout.Space(10);
+        
+        GUILayout.Label("--- GENERATE & EQUIP ---", GUI.skin.box);
+        
+        if (GUILayout.Button("Generate Sword"))
+        {
+            GenerateAndEquipWeapon(WeaponType.Sword);
+        }
+        
+        if (GUILayout.Button("Generate Axe"))
+        {
+            GenerateAndEquipWeapon(WeaponType.Axe);
+        }
+        
+        if (GUILayout.Button("Generate Bow"))
+        {
+            GenerateAndEquipWeapon(WeaponType.Bow);
+        }
+        
+        if (GUILayout.Button("Generate Staff"))
+        {
+            GenerateAndEquipWeapon(WeaponType.Staff);
+        }
+        
+        if (GUILayout.Button("Generate Dagger"))
+        {
+            GenerateAndEquipWeapon(WeaponType.Dagger);
+        }
+        
+        if (GUILayout.Button("Generate Mace"))
+        {
+            GenerateAndEquipWeapon(WeaponType.Mace);
+        }
+        
+        GUILayout.Space(10);
+        
+        if (GUILayout.Button("List All Weapon Models in Scene"))
+        {
+            ListWeaponModels();
+        }
+    }
+    
+    void DrawArmorTab()
+    {
+        GUILayout.Label("--- ARMOR SYSTEMS ---", GUI.skin.box);
+        
+        PlayerStats stats = GetComponent<PlayerStats>();
+        
+        if (stats != null)
+        {
+            var equippedArmor = stats.GetAllEquippedArmor();
+            
+            GUILayout.Label($"Total Armor: {stats.GetTotalArmor():F0}");
+            GUILayout.Label($"Health Bonus: {stats.GetMaxHealth() - 100 - stats.GetLevel() * 10:F0}");
+            
+            GUILayout.Space(5);
+            
+            GUILayout.Label("Equipped Armor:");
+            
+            foreach (ArmorType type in System.Enum.GetValues(typeof(ArmorType)))
+            {
+                if (equippedArmor.TryGetValue(type, out Armor armor) && armor != null)
+                {
+                    GUILayout.Label($"  {type}: {armor.itemName} (+{armor.stats.armor:F0})");
+                }
+                else
+                {
+                    GUILayout.Label($"  {type}: (empty)");
+                }
+            }
+        }
+        
+        GUILayout.Space(10);
+        
+        GUILayout.Label("--- GENERATE ARMOR ---", GUI.skin.box);
+        
+        if (GUILayout.Button("Generate Helmet"))
+        {
+            GenerateArmorPiece(ArmorType.Helmet);
+        }
+        
+        if (GUILayout.Button("Generate Chestplate"))
+        {
+            GenerateArmorPiece(ArmorType.Chestplate);
+        }
+        
+        if (GUILayout.Button("Generate Leggings"))
+        {
+            GenerateArmorPiece(ArmorType.Leggings);
+        }
+        
+        if (GUILayout.Button("Generate Gloves"))
+        {
+            GenerateArmorPiece(ArmorType.Gloves);
+        }
+        
+        if (GUILayout.Button("Generate Boots"))
+        {
+            GenerateArmorPiece(ArmorType.Boots);
+        }
+        
+        if (GUILayout.Button("Generate Shield"))
+        {
+            GenerateArmorPiece(ArmorType.Shield);
+        }
+        
+        GUILayout.Space(10);
+        
+        if (GUILayout.Button("Generate Full Armor Set"))
+        {
+            foreach (ArmorType type in System.Enum.GetValues(typeof(ArmorType)))
+            {
+                GenerateArmorPiece(type);
+            }
+        }
+    }
+    
+    void DrawEnemiesTab()
+    {
+        GUILayout.Label("--- ENEMY MANAGEMENT ---", GUI.skin.box);
+        
+        // Count enemies in scene
+        EnemyStats[] enemies = FindObjectsOfType<EnemyStats>();
+        GUILayout.Label($"Enemies in Scene: {enemies.Length}");
+        
+        GUILayout.Space(10);
+        
+        GUILayout.Label("--- SPAWN ENEMIES ---", GUI.skin.box);
+        
+        if (GUILayout.Button("Spawn Level 1 Enemy"))
+        {
+            SpawnEnemy(1);
+        }
+        
+        if (GUILayout.Button("Spawn Level 5 Enemy"))
+        {
+            SpawnEnemy(5);
+        }
+        
+        if (GUILayout.Button("Spawn Level 10 Enemy"))
+        {
+            SpawnEnemy(10);
+        }
+        
+        if (GUILayout.Button("Spawn 5 Random Enemies"))
+        {
+            for (int i = 0; i < 5; i++)
+            {
+                SpawnEnemy(Random.Range(1, 6));
+            }
+        }
+        
+        GUILayout.Space(10);
+        
+        if (GUILayout.Button("Kill All Enemies"))
+        {
+            KillAllEnemies();
+        }
+        
+        GUILayout.Space(10);
+        
+        // List enemies
+        if (enemies.Length > 0)
+        {
+            GUILayout.Label("--- ACTIVE ENEMIES ---", GUI.skin.box);
+            foreach (var enemy in enemies)
+            {
+                if (enemy != null)// && !enemy.IsDead())
+                {
+                    GUILayout.Label($"Level UNKNOWN Enemy - {Vector3.Distance(transform.position, enemy.transform.position):F1}m away");//{enemy.GetLevel()}
+                }
+            }
+        }
+    }
+    
+    void DrawProjectilesTab()
+    {
+        GUILayout.Label("--- PROJECTILE SYSTEMS ---", GUI.skin.box);
+        
+        ProjectileSystem projSys = FindObjectOfType<ProjectileSystem>();
+        RangedWeaponHandler ranged = GetComponent<RangedWeaponHandler>();
+        
+        if (projSys != null)
+        {
+            GUILayout.Label("ProjectileSystem: Active ✓");
+        }
+        else
+        {
+            GUILayout.Label("ERROR: No ProjectileSystem in scene!");
+        }
+        
+        if (ranged != null)
+        {
+            GUILayout.Label("RangedWeaponHandler: Active ✓");
+        }
+        else
+        {
+            GUILayout.Label("ERROR: No RangedWeaponHandler on player!");
+        }
+        
+        GUILayout.Space(10);
+        
+        GUILayout.Label("--- TEST PROJECTILES ---", GUI.skin.box);
+        
+        if (projSys != null)
+        {
+            if (GUILayout.Button("Fire Arrow"))
+            {
+                TestFireProjectile(ProjectileType.Arrow);
+            }
+            
+            if (GUILayout.Button("Fire Thrown Axe"))
+            {
+                TestFireProjectile(ProjectileType.ThrownAxe);
+            }
+            
+            if (GUILayout.Button("Fire Bullet"))
+            {
+                TestFireProjectile(ProjectileType.Bullet);
+            }
+            
+            if (GUILayout.Button("Fire Energy Beam"))
+            {
+                TestFireProjectile(ProjectileType.EnergyBeam);
+            }
+            
+            if (GUILayout.Button("Fire Psi Blast (Homing)"))
+            {
+                TestFireProjectile(ProjectileType.PsiBlast);
+            }
+            
+            GUILayout.Space(10);
+            
+            if (GUILayout.Button("Fire 10 Arrows Rapidly"))
+            {
+                StartCoroutine(RapidFireTest(ProjectileType.Arrow, 10));
+            }
+        }
+        
+        GUILayout.Space(10);
+        
+        GUILayout.Label("--- PROJECTILE INFO ---", GUI.skin.box);
+        GUILayout.Label("Arrow: Arc trajectory + gravity");
+        GUILayout.Label("Thrown Axe: Rotation + arc");
+        GUILayout.Label("Bullet: Fast + minimal drop");
+        GUILayout.Label("Energy: Instant raycast");
+        GUILayout.Label("Psi: Homing projectile");
+    }
+    
+    // ==================== HELPER METHODS ====================
+    
+    void CheckComponent<T>(string name) where T : Component
+    {
+        T component = GetComponent<T>();
+        string status = component != null ? "✓" : "✗ MISSING";
+        GUILayout.Label($"{name}: {status}");
+    }
+    
+    void CheckSceneComponent<T>(string name) where T : Object
+    {
+        T component = FindObjectOfType<T>();
+        string status = component != null ? "✓" : "✗ MISSING";
+        GUILayout.Label($"{name}: {status}");
+    }
+    
+    void RunFullSystemCheck()
+    {
+        Debug.Log("=== FULL SYSTEM CHECK ===");
+        
+        // Check player components
+        Debug.Log($"PlayerStats: {GetComponent<PlayerStats>() != null}");
+        Debug.Log($"InventoryManager: {GetComponent<InventoryManager>() != null}");
+        Debug.Log($"ExperienceManager: {GetComponent<ExperienceManager>() != null}");
+        Debug.Log($"ThirdPersonController: {GetComponent<ThirdPersonController>() != null}");
+        Debug.Log($"CombatAnimationController: {GetComponent<CombatAnimationController>() != null}");
+        Debug.Log($"RangedWeaponHandler: {GetComponent<RangedWeaponHandler>() != null}");
+        
+        // Check scene managers
+        Debug.Log($"makeItems: {FindObjectOfType<makeItems>() != null}");
+        Debug.Log($"ProceduralWeaponModels: {FindObjectOfType<ProceduralWeaponModels>() != null}");
+        Debug.Log($"ProceduralArmorModels: {FindObjectOfType<ProceduralArmorModels>() != null}");
+        Debug.Log($"ProjectileSystem: {FindObjectOfType<ProjectileSystem>() != null}");
+        
+        Debug.Log("Check complete! See Console for results.");
+    }
+    
+    void AddRandomItem(ItemType type)
+    {
+        makeItems gen = FindObjectOfType<makeItems>();
+        InventoryManager inv = GetComponent<InventoryManager>();
+        PlayerStats stats = GetComponent<PlayerStats>();
+        
+        if (gen != null && inv != null && stats != null)
+        {
+            int level = stats.GetLevel();
+            
+            if (type == ItemType.Weapon)
+            {
+                Weapon weapon = gen.GenerateWeapon(level);
+                inv.AddItem(weapon);
+                Debug.Log($"Added {weapon.rarity} {weapon.itemName}");
+            }
+            else if (type == ItemType.Armor)
+            {
+                Armor armor = gen.GenerateArmor(level);
+                inv.AddItem(armor);
+                Debug.Log($"Added {armor.rarity} {armor.itemName}");
+            }
+        }
+    }
+    
+    void AddWeaponOfRarity(ItemRarity targetRarity)
+    {
+        makeItems gen = FindObjectOfType<makeItems>();
+        InventoryManager inv = GetComponent<InventoryManager>();
+        PlayerStats stats = GetComponent<PlayerStats>();
+        
+        if (gen != null && inv != null && stats != null)
+        {
+            // Keep generating until we get the desired rarity
+            Weapon weapon = null;
+            int attempts = 0;
+            while (attempts < 100)
+            {
+                weapon = gen.GenerateWeapon(stats.GetLevel());
+                if (weapon.rarity == targetRarity) break;
+                attempts++;
+            }
+            
+            if (weapon != null)
+            {
+                inv.AddItem(weapon);
+                Debug.Log($"Added {weapon.rarity} {weapon.itemName}");
+            }
         }
     }
     
     void ClearInventory()
     {
-        var inv = GetComponent<InventoryManager>();
+        InventoryManager inv = GetComponent<InventoryManager>();
         if (inv != null)
         {
             var items = inv.GetAllItems();
@@ -292,79 +761,139 @@ public class GameTester : MonoBehaviour
             {
                 inv.RemoveItem(item);
             }
-            //Debug.Log("Inventory cleared");
+            Debug.Log("Inventory cleared");
         }
     }
     
-    void GenerateAndEquipTestWeapon(WeaponType type)
+    void GenerateAndEquipWeapon(WeaponType type)
     {
-        var gen = FindFirstObjectByType<makeItems>();
-        var modelGen = FindFirstObjectByType<ProceduralWeaponModels>();
-        var inv = GetComponent<InventoryManager>();
-        var stats = GetComponent<PlayerStats>();
+        makeItems gen = FindObjectOfType<makeItems>();
+        InventoryManager inv = GetComponent<InventoryManager>();
+        PlayerStats stats = GetComponent<PlayerStats>();
         
-        if (gen == null || modelGen == null || inv == null || stats == null)
+        if (gen != null && inv != null && stats != null)
         {
-            //Debug.LogError($"Missing components! Gen:{gen != null}, ModelGen:{modelGen != null}, Inv:{inv != null}, Stats:{stats != null}");
-            return;
+            Weapon weapon = gen.GenerateWeapon(stats.GetLevel());
+            weapon.weaponType = type;
+            weapon.itemName = $"{type} of Testing";
+            
+            inv.AddItem(weapon);
+            inv.EquipItem(weapon);
+            
+            Debug.Log($"Generated and equipped {weapon.itemName}");
         }
-        
-        // Generate weapon
-        Weapon weapon = gen.GenerateWeapon(stats.GetLevel());
-        
-        // Force the weapon type
-        weapon.weaponType = type;
-        weapon.itemName = $"Test {type}";
-        
-        // Generate model
-        weapon.weaponModel = modelGen.GenerateWeaponModel(weapon);
-        
-        //Debug.Log($"Generated {weapon.itemName}");
-        //Debug.Log($"  Model exists: {weapon.weaponModel != null}");
-        
-        if (weapon.weaponModel != null)
-        {
-            //Debug.Log($"  Model children: {weapon.weaponModel.transform.childCount}");
-            //Debug.Log($"  Model active: {weapon.weaponModel.activeSelf}");
-        }
-        
-        // Add to inventory
-        inv.AddItem(weapon);
-        
-        // Equip immediately
-        inv.EquipItem(weapon);
-        
-        //Debug.Log($"Equipped {weapon.itemName} - check your hand!");
     }
     
-    void ListWeaponModelsInScene()
+    void GenerateArmorPiece(ArmorType type)
     {
-        //Debug.Log("=== WEAPON MODELS IN SCENE ===");
+        makeItems gen = FindObjectOfType<makeItems>();
+        InventoryManager inv = GetComponent<InventoryManager>();
+        PlayerStats stats = GetComponent<PlayerStats>();
         
-        // Find all GameObjects with "_Model" in name
+        if (gen != null && inv != null && stats != null)
+        {
+            Armor armor = gen.GenerateArmor(stats.GetLevel());
+            armor.armorType = type;
+            armor.itemName = $"{type} of Testing";
+            
+            inv.AddItem(armor);
+            
+            Debug.Log($"Generated {armor.itemName}");
+        }
+    }
+    
+    void ListWeaponModels()
+    {
         GameObject[] allObjects = FindObjectsOfType<GameObject>();
-        int modelCount = 0;
+        int count = 0;
         
         foreach (GameObject obj in allObjects)
         {
             if (obj.name.Contains("_Model"))
             {
-                modelCount++;
-                //Debug.Log($"Found model: {obj.name}");
-                //Debug.Log($"  Active: {obj.activeSelf}");
-                //Debug.Log($"  Parent: {obj.transform.parent?.name ?? "None"}");
-                //Debug.Log($"  Position: {obj.transform.position}");
-                //Debug.Log($"  Children: {obj.transform.childCount}");
+                count++;
+                Debug.Log($"Model: {obj.name} - Active: {obj.activeSelf} - Parent: {obj.transform.parent?.name}");
             }
         }
         
-        //Debug.Log($"Total weapon models found: {modelCount}");
+        Debug.Log($"Found {count} weapon models in scene");
+    }
+    
+    void SpawnEnemy(int level)
+    {
+        Vector3 spawnPos = transform.position + transform.forward * spawnDistance + Vector3.up;
         
-        if (modelCount == 0)
+        // Try to find enemy prefab if not assigned
+        if (enemyPrefab == null)
         {
-            //Debug.LogWarning("NO WEAPON MODELS FOUND IN SCENE!");
-            //Debug.LogWarning("This means models are not being generated.");
-            //Debug.LogWarning("Check if ProceduralWeaponModels is on GameManager.");
+            // Look for existing enemy in scene to use as template
+            EnemyStats existingEnemy = FindObjectOfType<EnemyStats>();
+            if (existingEnemy != null)
+            {
+                enemyPrefab = existingEnemy.gameObject;
+            }
+        }
+        
+        if (enemyPrefab != null)
+        {
+            GameObject enemy = Instantiate(enemyPrefab, spawnPos, Quaternion.identity);
+            EnemyStats stats = enemy.GetComponent<EnemyStats>();
+            
+            // Set level using reflection since it's private
+            if (stats != null)
+            {
+                var field = typeof(EnemyStats).GetField("level", 
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (field != null)
+                {
+                    field.SetValue(stats, level);
+                }
+            }
+            
+            Debug.Log($"Spawned level {level} enemy at {spawnPos}");
+        }
+        else
+        {
+            Debug.LogError("No enemy prefab assigned! Add one in the inspector or have an enemy in the scene.");
+        }
+    }
+    
+    void KillAllEnemies()
+    {
+        EnemyStats[] enemies = FindObjectsOfType<EnemyStats>();
+        foreach (var enemy in enemies)
+        {
+            if (enemy != null)
+            {
+                Destroy(enemy.gameObject);
+            }
+        }
+        Debug.Log($"Killed {enemies.Length} enemies");
+    }
+    
+    void TestFireProjectile(ProjectileType type)
+    {
+        ProjectileSystem projSys = FindObjectOfType<ProjectileSystem>();
+        PlayerStats stats = GetComponent<PlayerStats>();
+        
+        if (projSys != null && stats != null)
+        {
+            Vector3 origin = transform.position + Vector3.up * 1.5f + transform.forward * 0.5f;
+            Vector3 direction = transform.forward;
+            float damage = stats.GetTotalDamage();
+            
+            projSys.FireProjectile(type, origin, direction, damage, false, LayerMask.GetMask("Enemy"), transform);
+            
+            Debug.Log($"Fired {type} projectile");
+        }
+    }
+    
+    System.Collections.IEnumerator RapidFireTest(ProjectileType type, int count)
+    {
+        for (int i = 0; i < count; i++)
+        {
+            TestFireProjectile(type);
+            yield return new WaitForSeconds(0.1f);
         }
     }
 }
