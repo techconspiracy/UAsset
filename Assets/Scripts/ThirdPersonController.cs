@@ -1,6 +1,6 @@
-// ThirdPersonController.cs - GAMEPAD SUPPORT RESTORED
-// Replace your current controller with this version
-// Full gamepad support + keyboard/mouse
+// ThirdPersonController.cs - FIXED VERSION
+// Now properly integrates with CombatAnimationController
+// Supports both melee and ranged weapons
 
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -27,6 +27,9 @@ public class ThirdPersonController : MonoBehaviour
     private CharacterController controller;
     private PlayerInput playerInput;
     private Animator animator;
+    private PlayerStats playerStats;
+    private CombatAnimationController combatController;
+    private RangedWeaponHandler rangedHandler;
     
     // Input values
     private Vector2 moveInput;
@@ -50,9 +53,6 @@ public class ThirdPersonController : MonoBehaviour
     private int animIDFreeFall;
     private int animIDAttack;
     
-    private PlayerStats playerStats;
-    
-    // Input device detection
     private string currentControlScheme = "";
     
     void Awake()
@@ -61,6 +61,8 @@ public class ThirdPersonController : MonoBehaviour
         playerInput = GetComponent<PlayerInput>();
         animator = GetComponentInChildren<Animator>();
         playerStats = GetComponent<PlayerStats>();
+        combatController = GetComponent<CombatAnimationController>();
+        rangedHandler = GetComponent<RangedWeaponHandler>();
         
         if (cameraTransform == null)
         {
@@ -72,12 +74,10 @@ public class ThirdPersonController : MonoBehaviour
             AssignAnimationIDs();
         }
         
-        // Subscribe to control scheme changes
         if (playerInput != null)
         {
             playerInput.onControlsChanged += OnControlsChanged;
             currentControlScheme = playerInput.currentControlScheme;
-            //Debug.Log($"Starting control scheme: {currentControlScheme}");
         }
         
         Cursor.lockState = CursorLockMode.Locked;
@@ -95,7 +95,6 @@ public class ThirdPersonController : MonoBehaviour
     void OnControlsChanged(PlayerInput input)
     {
         currentControlScheme = input.currentControlScheme;
-        //Debug.Log($"Control scheme changed to: {currentControlScheme}");
     }
     
     void AssignAnimationIDs()
@@ -189,8 +188,59 @@ public class ThirdPersonController : MonoBehaviour
     void Attack()
     {
         lastAttackTime = Time.time;
-        ////Debug.LogWarning("Last attack time was " + lastAttackTime + "!");
+        attackPressed = false;
 
+        if (playerStats == null)
+        {
+            Debug.LogWarning("PlayerStats not found!");
+            return;
+        }
+
+        Weapon equippedWeapon = playerStats.GetEquippedWeapon();
+        
+        // Determine if weapon is ranged
+        bool isRangedWeapon = false;
+        WeaponType weaponType = WeaponType.Sword; // Default
+        
+        if (equippedWeapon != null)
+        {
+            weaponType = equippedWeapon.weaponType;
+            isRangedWeapon = (weaponType == WeaponType.Bow || weaponType == WeaponType.Staff);
+        }
+
+        // ✅ FIXED: Integrate with CombatAnimationController
+        if (combatController != null)
+        {
+            combatController.PerformAttack(weaponType);
+            Debug.Log($"Triggered {weaponType} attack animation");
+        }
+
+        // Handle ranged vs melee attacks
+        if (isRangedWeapon)
+        {
+            // Use ranged weapon handler
+            if (rangedHandler != null)
+            {
+                bool fired = rangedHandler.TryRangedAttack();
+                if (fired)
+                {
+                    Debug.Log($"Fired ranged weapon: {weaponType}");
+                }
+            }
+            else
+            {
+                Debug.LogWarning("RangedWeaponHandler not found! Cannot fire ranged weapon.");
+            }
+        }
+        else
+        {
+            // Perform melee attack
+            PerformMeleeAttack();
+        }
+    }
+
+    void PerformMeleeAttack()
+    {
         if (animator != null)
         {
             animator.SetTrigger(animIDAttack);
@@ -198,50 +248,37 @@ public class ThirdPersonController : MonoBehaviour
 
         if (attackPoint == null)
         {
-            //Debug.LogWarning("Attack Point not assigned!");
-            attackPressed = false;
+            Debug.LogWarning("Attack Point not assigned!");
             return;
         }
 
-        // Find all colliders within the attack sphere
-        ////Debug.LogWarning("Creating a collider!");
+        // Find all enemies in attack range
         Collider[] hitEnemies = Physics.OverlapSphere(attackPoint.position, attackRange, enemyLayers);
 
-        // Check if any enemies were hit
         if (hitEnemies.Length > 0)
         {
             foreach (Collider enemy in hitEnemies)
             {
-                ////Debug.LogWarning("Hit!");
                 EnemyStats enemyStats = enemy.GetComponent<EnemyStats>();
                 if (enemyStats != null && playerStats != null)
                 {
-                    ////Debug.LogWarning("Found enemystats & playerstats!");
                     float damage = playerStats.GetTotalDamage();
                     bool isCrit = Random.value < (playerStats.GetCritChance() / 100f);
                 
                     if (isCrit)
                     {
-                        //Debug.LogWarning("Critical Hit!");
                         damage *= 2f;
+                        Debug.Log("Critical Hit!");
                     }
                 
-                    ////Debug.LogWarning("Sending TakeDamage message!");
                     enemyStats.TakeDamage(damage, isCrit);
+                    Debug.Log($"Hit enemy for {damage:F0} damage" + (isCrit ? " (CRIT)" : ""));
                 }
             }
         }
-        else // This else block is correctly paired with the if (hitEnemies.Length > 0) check
-        {
-            ////Debug.LogWarning("No Hit!");
-        }
-    
-        attackPressed = false;
     }
-
     
     // ===== INPUT SYSTEM CALLBACKS =====
-    // These receive input from BOTH keyboard/mouse AND gamepad
     
     public void OnMove(InputValue value)
     {
@@ -256,8 +293,6 @@ public class ThirdPersonController : MonoBehaviour
     public void OnAttack(InputValue value)
     {
         attackPressed = value.isPressed;
-        ////Debug.Log($"OnAttack called! attackPressed = {attackPressed}");
-        //Attack();
     }
     
     public void OnSprint(InputValue value)
@@ -269,17 +304,15 @@ public class ThirdPersonController : MonoBehaviour
     {
         if (value.isPressed)
         {
-            // Use FindFirstObjectByType and specify we only want active objects
             InventoryUI inventoryUI = FindFirstObjectByType<InventoryUI>(FindObjectsInactive.Include);
             
             if (inventoryUI != null)
             {
-                ////Debug.Log("Found InventoryUI - toggling!");
                 inventoryUI.ToggleInventory();
             }
             else
             {
-                //Debug.LogWarning("InventoryUI not found! Make sure InventoryUI script is attached to InventoryPanel.");
+                Debug.LogWarning("InventoryUI not found!");
             }
         }
     }
