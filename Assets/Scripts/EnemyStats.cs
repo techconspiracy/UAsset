@@ -1,6 +1,6 @@
-// EnemyStats.cs
-// CREATE THIS THIRD - Requires ItemSystem.cs, PlayerStats.cs
-// Manages enemy health, combat, and loot drops
+// EnemyStats.cs - FIXED VERSION
+// Now properly awards experience on death
+// This fixes the core progression loop
 
 using UnityEngine;
 using UnityEngine.UI;
@@ -19,7 +19,7 @@ public class EnemyStats : MonoBehaviour
     [SerializeField] private int expReward = 25;
     [SerializeField] private float lootDropChance = 0.3f;
     
-    [Header("UI References (Assign After Creating Enemy UI)")]
+    [Header("UI References")]
     [SerializeField] private Canvas healthBarCanvas;
     [SerializeField] private Image healthBarFill;
     
@@ -71,7 +71,6 @@ public class EnemyStats : MonoBehaviour
         if (healthBarCanvas != null && Camera.main != null)
         {
             healthBarCanvas.transform.LookAt(Camera.main.transform);
-            // Rotate 180 degrees so it faces the right way
             healthBarCanvas.transform.Rotate(0, 180, 0);
         }
     }
@@ -83,7 +82,7 @@ public class EnemyStats : MonoBehaviour
         if (playerStats != null)
         {
             playerStats.TakeDamage(damage, false);
-            //Debug.Log($"Enemy attacked player for {damage} damage!");
+            Debug.Log($"Enemy attacked player for {damage} damage!");
         }
     }
     
@@ -100,7 +99,7 @@ public class EnemyStats : MonoBehaviour
         ShowDamageText(actualDamage, isCrit);
         UpdateHealthBar();
         
-        //Debug.Log($"Enemy took {actualDamage:F0} damage! Health: {currentHealth}/{maxHealth}");
+        Debug.Log($"Enemy took {actualDamage:F0} damage! Health: {currentHealth}/{maxHealth}");
         
         if (currentHealth <= 0)
         {
@@ -123,8 +122,28 @@ public class EnemyStats : MonoBehaviour
     void Die()
     {
         isDead = true;
-        //Debug.Log("Enemy died!");
+        Debug.Log($"Enemy died! Rewarding {expReward} XP to player.");
         
+        // ✅ FIXED: Award experience to player
+        if (playerStats != null)
+        {
+            ExperienceManager expManager = playerStats.GetComponent<ExperienceManager>();
+            if (expManager != null)
+            {
+                expManager.GainExperience(expReward);
+                Debug.Log($"✓ Awarded {expReward} XP to player");
+            }
+            else
+            {
+                Debug.LogWarning("ExperienceManager not found on player! Cannot award XP.");
+            }
+        }
+        else
+        {
+            Debug.LogWarning("PlayerStats reference is null! Cannot award XP.");
+        }
+        
+        // Drop loot
         if (Random.value < lootDropChance)
         {
             DropLoot();
@@ -138,16 +157,23 @@ public class EnemyStats : MonoBehaviour
         makeItems generator = FindFirstObjectByType<makeItems>();
         if (generator != null)
         {
+            Item item;
+            
+            // 50/50 weapon or armor
             if (Random.value < 0.5f)
             {
-                Weapon weapon = generator.GenerateWeapon(level);
-                CreateLootDrop(weapon);
+                item = generator.GenerateWeapon(level);
             }
             else
             {
-                Armor armor = generator.GenerateArmor(level);
-                CreateLootDrop(armor);
+                item = generator.GenerateArmor(level);
             }
+            
+            CreateLootDrop(item);
+        }
+        else
+        {
+            Debug.LogWarning("makeItems (ItemGenerator) not found! Cannot drop loot.");
         }
     }
     
@@ -169,27 +195,33 @@ public class EnemyStats : MonoBehaviour
             lootDrop.SetItem(item);
         }
         
-        //Debug.Log($"Dropped {item.rarity} {item.itemName}");
+        Debug.Log($"Dropped {item.rarity} {item.itemName}");
     }
     
     void UpdateHealthBar()
     {
-    if (healthBarFill != null)
+        if (healthBarFill != null)
         {
             float healthPercent = currentHealth / maxHealth;
             healthBarFill.fillAmount = healthPercent;
         
-        // Green → Yellow → Red
+            // Color gradient: Green → Yellow → Red
             if (healthPercent > 0.5f)
             {
-            // Green to Yellow
+                // Green to Yellow
                 healthBarFill.color = Color.Lerp(Color.yellow, Color.green, (healthPercent - 0.5f) * 2f);
             }
             else
             {
-            // Yellow to Red
+                // Yellow to Red
                 healthBarFill.color = Color.Lerp(Color.red, Color.yellow, healthPercent * 2f);
             }
         }
     }
+    
+    // Public getters for debugging/UI
+    public int GetLevel() => level;
+    public float GetCurrentHealth() => currentHealth;
+    public float GetMaxHealth() => maxHealth;
+    public bool IsDead() => isDead;
 }
