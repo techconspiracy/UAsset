@@ -1,442 +1,482 @@
-// ProjectileSystem.cs
-// Handles all ranged weapon projectiles with different physics
-// Attach to GameManager or create a ProjectileManager GameObject
+// ProjectileSystem.cs - NEW FILE
+// Complete projectile system for ranged weapons
+// Add this to a GameObject in your scene (can be on GameManager)
 
 using UnityEngine;
-using System.Collections;
+using System.Collections.Generic;
 
 public enum ProjectileType
 {
-    Arrow,          // Bow - Arc trajectory with gravity
-    ThrownAxe,      // Thrown weapon - Rotation + arc
-    ThrownKnife,    // Fast throw - Less arc, rotates
-    Bullet,         // Guns - Fast linear with slight drop
-    EnergyBeam,     // Energy weapons - Instant raycast
-    PsiBlast,       // Psi weapons - Homing projectile
-    Magic          // Magic - Particle with special effects
+    Arrow,
+    ThrownAxe,
+    ThrownKnife,
+    Bullet,
+    EnergyBeam,
+    PsiBlast,
+    Fireball,
+    IceShard
 }
 
 public class ProjectileSystem : MonoBehaviour
 {
-    [Header("Projectile Prefabs")]
+    [Header("Projectile Prefabs (Optional - procedural if not assigned)")]
     [SerializeField] private GameObject arrowPrefab;
     [SerializeField] private GameObject axePrefab;
     [SerializeField] private GameObject knifePrefab;
-    [SerializeField] private GameObject bulletPrefab;
-    [SerializeField] private GameObject energyBeamPrefab;
-    [SerializeField] private GameObject psiBlastPrefab;
     
     [Header("Projectile Settings")]
-    [SerializeField] private float arrowSpeed = 20f;
-    [SerializeField] private float thrownWeaponSpeed = 15f;
+    [SerializeField] private float arrowSpeed = 30f;
     [SerializeField] private float bulletSpeed = 100f;
-    [SerializeField] private float psiSpeed = 12f;
-    [SerializeField] private float psiHomingStrength = 5f;
+    [SerializeField] private float thrownSpeed = 20f;
+    [SerializeField] private float energySpeed = 50f;
+    [SerializeField] private float homingSpeed = 25f;
     
-    [Header("Gravity Settings")]
-    [SerializeField] private float arrowGravity = 9.81f;
+    [Header("Physics")]
+    [SerializeField] private float arrowGravity = 9.8f;
     [SerializeField] private float thrownGravity = 12f;
     [SerializeField] private float bulletGravity = 2f;
     
-    [Header("Effects")]
-    [SerializeField] private GameObject hitEffect;
-    [SerializeField] private GameObject muzzleFlash;
+    [Header("Homing Settings")]
+    [SerializeField] private float homingStrength = 5f;
+    [SerializeField] private float homingRange = 20f;
     
-    private static ProjectileSystem instance;
+    private List<Projectile> activeProjectiles = new List<Projectile>();
     
-    void Awake()
+    void Update()
     {
-        if (instance == null)
-            instance = this;
-        else
-            Destroy(gameObject);
+        // Update all active projectiles
+        for (int i = activeProjectiles.Count - 1; i >= 0; i--)
+        {
+            if (activeProjectiles[i] == null || activeProjectiles[i].gameObject == null)
+            {
+                activeProjectiles.RemoveAt(i);
+            }
+        }
     }
     
-    public static ProjectileSystem Instance => instance;
-    
-    // Main method to fire any projectile type
-    public void FireProjectile(ProjectileType type, Vector3 origin, Vector3 direction, float damage, bool isCrit, LayerMask targetLayers, Transform shooter = null)
+    public GameObject FireProjectile(
+        ProjectileType type,
+        Vector3 origin,
+        Vector3 direction,
+        float damage,
+        bool isCrit,
+        LayerMask targetLayers,
+        Transform shooter)
     {
+        GameObject projectileObj = CreateProjectileObject(type);
+        projectileObj.transform.position = origin;
+        projectileObj.transform.rotation = Quaternion.LookRotation(direction);
+        
+        Projectile projectile = projectileObj.AddComponent<Projectile>();
+        projectile.Initialize(type, direction, damage, isCrit, targetLayers, shooter, this);
+        
+        activeProjectiles.Add(projectile);
+        
+        return projectileObj;
+    }
+    
+    GameObject CreateProjectileObject(ProjectileType type)
+    {
+        GameObject obj = null;
+        
+        // Try to use prefab if assigned
         switch (type)
         {
             case ProjectileType.Arrow:
-                FireArrow(origin, direction, damage, isCrit, targetLayers);
+                if (arrowPrefab != null) obj = Instantiate(arrowPrefab);
                 break;
             case ProjectileType.ThrownAxe:
-                FireThrownWeapon(origin, direction, damage, isCrit, targetLayers, true);
+                if (axePrefab != null) obj = Instantiate(axePrefab);
                 break;
             case ProjectileType.ThrownKnife:
-                FireThrownWeapon(origin, direction, damage, isCrit, targetLayers, false);
+                if (knifePrefab != null) obj = Instantiate(knifePrefab);
+                break;
+        }
+        
+        // Create procedural projectile if no prefab
+        if (obj == null)
+        {
+            obj = CreateProceduralProjectile(type);
+        }
+        
+        return obj;
+    }
+    
+    GameObject CreateProceduralProjectile(ProjectileType type)
+    {
+        GameObject obj = new GameObject($"Projectile_{type}");
+        
+        switch (type)
+        {
+            case ProjectileType.Arrow:
+                CreateArrowModel(obj);
+                break;
+            case ProjectileType.ThrownAxe:
+                CreateThrownAxeModel(obj);
+                break;
+            case ProjectileType.ThrownKnife:
+                CreateThrownKnifeModel(obj);
                 break;
             case ProjectileType.Bullet:
-                FireBullet(origin, direction, damage, isCrit, targetLayers);
+                CreateBulletModel(obj);
                 break;
             case ProjectileType.EnergyBeam:
-                FireEnergyBeam(origin, direction, damage, isCrit, targetLayers);
+                CreateEnergyBeamModel(obj);
                 break;
             case ProjectileType.PsiBlast:
-                FirePsiBlast(origin, direction, damage, isCrit, targetLayers, shooter);
+                CreatePsiBlastModel(obj);
+                break;
+            case ProjectileType.Fireball:
+                CreateFireballModel(obj);
+                break;
+            case ProjectileType.IceShard:
+                CreateIceShardModel(obj);
                 break;
         }
+        
+        return obj;
     }
     
-    void FireArrow(Vector3 origin, Vector3 direction, float damage, bool isCrit, LayerMask targetLayers)
+    void CreateArrowModel(GameObject parent)
     {
-        GameObject arrow = CreateProjectile(arrowPrefab, origin, direction);
-        if (arrow == null) return;
+        // Arrow shaft
+        GameObject shaft = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        shaft.transform.SetParent(parent.transform);
+        shaft.transform.localPosition = Vector3.zero;
+        shaft.transform.localRotation = Quaternion.Euler(90, 0, 0);
+        shaft.transform.localScale = new Vector3(0.02f, 0.3f, 0.02f);
         
-        ArrowProjectile proj = arrow.AddComponent<ArrowProjectile>();
-        proj.Initialize(direction, arrowSpeed, arrowGravity, damage, isCrit, targetLayers);
+        Renderer renderer = shaft.GetComponent<Renderer>();
+        renderer.material.color = new Color(0.6f, 0.4f, 0.2f);
+        Destroy(shaft.GetComponent<Collider>());
+        
+        // Arrow tip
+        GameObject tip = GameObject.CreatePrimitive(PrimitiveType.Cone);
+        tip.transform.SetParent(parent.transform);
+        tip.transform.localPosition = new Vector3(0, 0, 0.35f);
+        tip.transform.localRotation = Quaternion.Euler(0, 0, 0);
+        tip.transform.localScale = new Vector3(0.05f, 0.08f, 0.05f);
+        
+        renderer = tip.GetComponent<Renderer>();
+        renderer.material.color = new Color(0.7f, 0.7f, 0.8f);
+        Destroy(tip.GetComponent<Collider>());
+        
+        // Add sphere collider for hit detection
+        SphereCollider collider = parent.AddComponent<SphereCollider>();
+        collider.radius = 0.1f;
+        collider.isTrigger = true;
+        
+        // Add rigidbody
+        Rigidbody rb = parent.AddComponent<Rigidbody>();
+        rb.useGravity = false;
+        rb.isKinematic = true;
     }
     
-    void FireThrownWeapon(Vector3 origin, Vector3 direction, float damage, bool isCrit, LayerMask targetLayers, bool isAxe)
+    void CreateThrownAxeModel(GameObject parent)
     {
-        GameObject prefab = isAxe ? axePrefab : knifePrefab;
-        GameObject thrown = CreateProjectile(prefab, origin, direction);
-        if (thrown == null) return;
+        GameObject axe = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        axe.transform.SetParent(parent.transform);
+        axe.transform.localScale = new Vector3(0.3f, 0.05f, 0.3f);
         
-        ThrownWeaponProjectile proj = thrown.AddComponent<ThrownWeaponProjectile>();
-        proj.Initialize(direction, thrownWeaponSpeed, thrownGravity, damage, isCrit, targetLayers, isAxe);
+        Renderer renderer = axe.GetComponent<Renderer>();
+        renderer.material.color = new Color(0.6f, 0.6f, 0.7f);
+        Destroy(axe.GetComponent<Collider>());
+        
+        SphereCollider collider = parent.AddComponent<SphereCollider>();
+        collider.radius = 0.2f;
+        collider.isTrigger = true;
+        
+        Rigidbody rb = parent.AddComponent<Rigidbody>();
+        rb.useGravity = false;
+        rb.isKinematic = true;
     }
     
-    void FireBullet(Vector3 origin, Vector3 direction, float damage, bool isCrit, LayerMask targetLayers)
+    void CreateThrownKnifeModel(GameObject parent)
     {
-        // Muzzle flash
-        if (muzzleFlash != null)
-        {
-            Instantiate(muzzleFlash, origin, Quaternion.LookRotation(direction));
-        }
+        GameObject knife = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        knife.transform.SetParent(parent.transform);
+        knife.transform.localScale = new Vector3(0.05f, 0.02f, 0.2f);
         
-        GameObject bullet = CreateProjectile(bulletPrefab, origin, direction);
-        if (bullet == null) return;
+        Renderer renderer = knife.GetComponent<Renderer>();
+        renderer.material.color = new Color(0.8f, 0.8f, 0.9f);
+        Destroy(knife.GetComponent<Collider>());
         
-        BulletProjectile proj = bullet.AddComponent<BulletProjectile>();
-        proj.Initialize(direction, bulletSpeed, bulletGravity, damage, isCrit, targetLayers);
+        SphereCollider collider = parent.AddComponent<SphereCollider>();
+        collider.radius = 0.1f;
+        collider.isTrigger = true;
+        
+        Rigidbody rb = parent.AddComponent<Rigidbody>();
+        rb.useGravity = false;
+        rb.isKinematic = true;
     }
     
-    void FireEnergyBeam(Vector3 origin, Vector3 direction, float damage, bool isCrit, LayerMask targetLayers)
+    void CreateBulletModel(GameObject parent)
     {
-        // Instant raycast
-        RaycastHit hit;
-        if (Physics.Raycast(origin, direction, out hit, 100f, targetLayers))
-        {
-            // Hit something
-            EnemyStats enemy = hit.collider.GetComponent<EnemyStats>();
-            if (enemy != null)
-            {
-                enemy.TakeDamage(damage, isCrit);
-            }
-            
-            // Visual beam
-            StartCoroutine(DrawEnergyBeam(origin, hit.point));
-            
-            if (hitEffect != null)
-            {
-                Instantiate(hitEffect, hit.point, Quaternion.LookRotation(hit.normal));
-            }
-        }
-        else
-        {
-            // No hit, draw to max distance
-            StartCoroutine(DrawEnergyBeam(origin, origin + direction * 100f));
-        }
+        GameObject bullet = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        bullet.transform.SetParent(parent.transform);
+        bullet.transform.localScale = Vector3.one * 0.05f;
+        
+        Renderer renderer = bullet.GetComponent<Renderer>();
+        renderer.material.color = Color.yellow;
+        Destroy(bullet.GetComponent<Collider>());
+        
+        SphereCollider collider = parent.AddComponent<SphereCollider>();
+        collider.radius = 0.05f;
+        collider.isTrigger = true;
+        
+        Rigidbody rb = parent.AddComponent<Rigidbody>();
+        rb.useGravity = false;
+        rb.isKinematic = true;
     }
     
-    void FirePsiBlast(Vector3 origin, Vector3 direction, float damage, bool isCrit, LayerMask targetLayers, Transform shooter)
-    {
-        GameObject blast = CreateProjectile(psiBlastPrefab, origin, direction);
-        if (blast == null) return;
-        
-        PsiProjectile proj = blast.AddComponent<PsiProjectile>();
-        proj.Initialize(direction, psiSpeed, damage, isCrit, targetLayers, psiHomingStrength, shooter);
-    }
-    
-    GameObject CreateProjectile(GameObject prefab, Vector3 position, Vector3 direction)
-    {
-        GameObject proj;
-        
-        if (prefab != null)
-        {
-            proj = Instantiate(prefab, position, Quaternion.LookRotation(direction));
-        }
-        else
-        {
-            // Create default projectile
-            proj = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            proj.transform.position = position;
-            proj.transform.localScale = Vector3.one * 0.1f;
-            proj.GetComponent<Collider>().isTrigger = true;
-        }
-        
-        return proj;
-    }
-    
-    IEnumerator DrawEnergyBeam(Vector3 start, Vector3 end)
+    void CreateEnergyBeamModel(GameObject parent)
     {
         GameObject beam = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-        
-        Vector3 midpoint = (start + end) / 2f;
-        float distance = Vector3.Distance(start, end);
-        
-        beam.transform.position = midpoint;
-        beam.transform.LookAt(end);
-        beam.transform.Rotate(90, 0, 0);
-        beam.transform.localScale = new Vector3(0.1f, distance / 2f, 0.1f);
+        beam.transform.SetParent(parent.transform);
+        beam.transform.localRotation = Quaternion.Euler(90, 0, 0);
+        beam.transform.localScale = new Vector3(0.1f, 2f, 0.1f);
         
         Renderer renderer = beam.GetComponent<Renderer>();
         Material mat = new Material(Shader.Find("Standard"));
+        mat.color = Color.cyan;
         mat.EnableKeyword("_EMISSION");
         mat.SetColor("_EmissionColor", Color.cyan * 2f);
-        mat.color = Color.cyan;
         renderer.material = mat;
-        
         Destroy(beam.GetComponent<Collider>());
         
-        yield return new WaitForSeconds(0.1f);
-        
-        Destroy(beam);
+        CapsuleCollider collider = parent.AddComponent<CapsuleCollider>();
+        collider.radius = 0.1f;
+        collider.height = 4f;
+        collider.direction = 2; // Z-axis
+        collider.isTrigger = true;
     }
     
-    public void CreateHitEffect(Vector3 position)
+    void CreatePsiBlastModel(GameObject parent)
     {
-        if (hitEffect != null)
+        GameObject orb = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        orb.transform.SetParent(parent.transform);
+        orb.transform.localScale = Vector3.one * 0.3f;
+        
+        Renderer renderer = orb.GetComponent<Renderer>();
+        Material mat = new Material(Shader.Find("Standard"));
+        mat.color = new Color(0.5f, 0f, 1f, 0.8f);
+        mat.EnableKeyword("_EMISSION");
+        mat.SetColor("_EmissionColor", new Color(0.5f, 0f, 1f) * 3f);
+        renderer.material = mat;
+        Destroy(orb.GetComponent<Collider>());
+        
+        SphereCollider collider = parent.AddComponent<SphereCollider>();
+        collider.radius = 0.15f;
+        collider.isTrigger = true;
+        
+        Rigidbody rb = parent.AddComponent<Rigidbody>();
+        rb.useGravity = false;
+        rb.isKinematic = true;
+    }
+    
+    void CreateFireballModel(GameObject parent)
+    {
+        GameObject fireball = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        fireball.transform.SetParent(parent.transform);
+        fireball.transform.localScale = Vector3.one * 0.4f;
+        
+        Renderer renderer = fireball.GetComponent<Renderer>();
+        Material mat = new Material(Shader.Find("Standard"));
+        mat.color = new Color(1f, 0.3f, 0f);
+        mat.EnableKeyword("_EMISSION");
+        mat.SetColor("_EmissionColor", new Color(1f, 0.5f, 0f) * 4f);
+        renderer.material = mat;
+        Destroy(fireball.GetComponent<Collider>());
+        
+        SphereCollider collider = parent.AddComponent<SphereCollider>();
+        collider.radius = 0.2f;
+        collider.isTrigger = true;
+    }
+    
+    void CreateIceShardModel(GameObject parent)
+    {
+        GameObject shard = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        shard.transform.SetParent(parent.transform);
+        shard.transform.localScale = new Vector3(0.1f, 0.1f, 0.5f);
+        
+        Renderer renderer = shard.GetComponent<Renderer>();
+        Material mat = new Material(Shader.Find("Standard"));
+        mat.color = new Color(0.5f, 0.8f, 1f, 0.7f);
+        mat.SetFloat("_Metallic", 0.8f);
+        mat.SetFloat("_Glossiness", 0.9f);
+        renderer.material = mat;
+        Destroy(shard.GetComponent<Collider>());
+        
+        CapsuleCollider collider = parent.AddComponent<CapsuleCollider>();
+        collider.radius = 0.1f;
+        collider.height = 0.5f;
+        collider.direction = 2; // Z-axis
+        collider.isTrigger = true;
+    }
+    
+    public float GetProjectileSpeed(ProjectileType type)
+    {
+        switch (type)
         {
-            Instantiate(hitEffect, position, Quaternion.identity);
+            case ProjectileType.Arrow: return arrowSpeed;
+            case ProjectileType.ThrownAxe:
+            case ProjectileType.ThrownKnife: return thrownSpeed;
+            case ProjectileType.Bullet: return bulletSpeed;
+            case ProjectileType.EnergyBeam: return energySpeed;
+            case ProjectileType.PsiBlast: return homingSpeed;
+            case ProjectileType.Fireball: return energySpeed * 0.7f;
+            case ProjectileType.IceShard: return energySpeed * 0.8f;
+            default: return 20f;
         }
     }
+    
+    public float GetProjectileGravity(ProjectileType type)
+    {
+        switch (type)
+        {
+            case ProjectileType.Arrow: return arrowGravity;
+            case ProjectileType.ThrownAxe:
+            case ProjectileType.ThrownKnife: return thrownGravity;
+            case ProjectileType.Bullet: return bulletGravity;
+            default: return 0f; // Energy/magic projectiles ignore gravity
+        }
+    }
+    
+    public bool IsHoming(ProjectileType type)
+    {
+        return type == ProjectileType.PsiBlast;
+    }
+    
+    public float GetHomingStrength() => homingStrength;
+    public float GetHomingRange() => homingRange;
 }
 
-// Individual projectile behaviors
-public class ArrowProjectile : MonoBehaviour
+// Individual projectile behavior
+public class Projectile : MonoBehaviour
 {
+    private ProjectileType type;
     private Vector3 velocity;
-    private float gravity;
     private float damage;
     private bool isCrit;
     private LayerMask targetLayers;
-    private bool hasHit;
+    private Transform shooter;
+    private ProjectileSystem system;
     
-    public void Initialize(Vector3 direction, float speed, float grav, float dmg, bool crit, LayerMask layers)
+    private float lifetime = 5f;
+    private float lifetimeTimer = 0f;
+    private Transform homingTarget;
+    
+    public void Initialize(
+        ProjectileType projType,
+        Vector3 direction,
+        float dmg,
+        bool crit,
+        LayerMask targets,
+        Transform shooterTransform,
+        ProjectileSystem projSystem)
     {
-        velocity = direction.normalized * speed;
-        gravity = grav;
+        type = projType;
         damage = dmg;
         isCrit = crit;
-        targetLayers = layers;
+        targetLayers = targets;
+        shooter = shooterTransform;
+        system = projSystem;
         
-        Destroy(gameObject, 5f);
+        float speed = system.GetProjectileSpeed(type);
+        velocity = direction.normalized * speed;
+        
+        // Find homing target if applicable
+        if (system.IsHoming(type))
+        {
+            FindHomingTarget();
+        }
     }
     
     void Update()
     {
-        if (hasHit) return;
+        lifetimeTimer += Time.deltaTime;
+        
+        if (lifetimeTimer >= lifetime)
+        {
+            Destroy(gameObject);
+            return;
+        }
         
         // Apply gravity
+        float gravity = system.GetProjectileGravity(type);
         velocity.y -= gravity * Time.deltaTime;
         
-        // Point arrow in direction of travel
-        transform.rotation = Quaternion.LookRotation(velocity);
-        
-        // Move and check for collision
-        RaycastHit hit;
-        if (Physics.Raycast(transform.position, velocity.normalized, out hit, velocity.magnitude * Time.deltaTime, targetLayers))
+        // Apply homing
+        if (system.IsHoming(type) && homingTarget != null)
         {
-            Hit(hit);
+            Vector3 directionToTarget = (homingTarget.position - transform.position).normalized;
+            float homingStrength = system.GetHomingStrength();
+            velocity = Vector3.Lerp(velocity, directionToTarget * velocity.magnitude, homingStrength * Time.deltaTime);
+        }
+        
+        // Move projectile
+        transform.position += velocity * Time.deltaTime;
+        
+        // Rotate thrown weapons
+        if (type == ProjectileType.ThrownAxe || type == ProjectileType.ThrownKnife)
+        {
+            transform.Rotate(Vector3.right, 720f * Time.deltaTime);
         }
         else
         {
-            transform.position += velocity * Time.deltaTime;
-        }
-    }
-    
-    void Hit(RaycastHit hit)
-    {
-        hasHit = true;
-        
-        EnemyStats enemy = hit.collider.GetComponent<EnemyStats>();
-        if (enemy != null)
-        {
-            enemy.TakeDamage(damage, isCrit);
-        }
-        
-        // Stick arrow in surface
-        transform.position = hit.point;
-        transform.rotation = Quaternion.LookRotation(hit.normal);
-        
-        Destroy(gameObject, 2f);
-    }
-}
-
-public class ThrownWeaponProjectile : MonoBehaviour
-{
-    private Vector3 velocity;
-    private float gravity;
-    private float damage;
-    private bool isCrit;
-    private LayerMask targetLayers;
-    private bool hasHit;
-    private float rotationSpeed;
-    
-    public void Initialize(Vector3 direction, float speed, float grav, float dmg, bool crit, LayerMask layers, bool isAxe)
-    {
-        velocity = direction.normalized * speed;
-        gravity = grav;
-        damage = dmg;
-        isCrit = crit;
-        targetLayers = layers;
-        rotationSpeed = isAxe ? 720f : 1080f; // Axes rotate slower
-        
-        Destroy(gameObject, 5f);
-    }
-    
-    void Update()
-    {
-        if (hasHit) return;
-        
-        velocity.y -= gravity * Time.deltaTime;
-        
-        // Rotate weapon
-        transform.Rotate(Vector3.right, rotationSpeed * Time.deltaTime);
-        
-        RaycastHit hit;
-        if (Physics.Raycast(transform.position, velocity.normalized, out hit, velocity.magnitude * Time.deltaTime, targetLayers))
-        {
-            Hit(hit);
-        }
-        else
-        {
-            transform.position += velocity * Time.deltaTime;
-        }
-    }
-    
-    void Hit(RaycastHit hit)
-    {
-        hasHit = true;
-        
-        EnemyStats enemy = hit.collider.GetComponent<EnemyStats>();
-        if (enemy != null)
-        {
-            enemy.TakeDamage(damage, isCrit);
-        }
-        
-        Destroy(gameObject, 0.1f);
-    }
-}
-
-public class BulletProjectile : MonoBehaviour
-{
-    private Vector3 velocity;
-    private float gravity;
-    private float damage;
-    private bool isCrit;
-    private LayerMask targetLayers;
-    
-    public void Initialize(Vector3 direction, float speed, float grav, float dmg, bool crit, LayerMask layers)
-    {
-        velocity = direction.normalized * speed;
-        gravity = grav;
-        damage = dmg;
-        isCrit = crit;
-        targetLayers = layers;
-        
-        Destroy(gameObject, 2f);
-    }
-    
-    void Update()
-    {
-        velocity.y -= gravity * Time.deltaTime;
-        
-        RaycastHit hit;
-        if (Physics.Raycast(transform.position, velocity.normalized, out hit, velocity.magnitude * Time.deltaTime, targetLayers))
-        {
-            Hit(hit);
-        }
-        else
-        {
-            transform.position += velocity * Time.deltaTime;
-        }
-    }
-    
-    void Hit(RaycastHit hit)
-    {
-        EnemyStats enemy = hit.collider.GetComponent<EnemyStats>();
-        if (enemy != null)
-        {
-            enemy.TakeDamage(damage, isCrit);
-        }
-        
-        Destroy(gameObject);
-    }
-}
-
-public class PsiProjectile : MonoBehaviour
-{
-    private Vector3 velocity;
-    private float damage;
-    private bool isCrit;
-    private LayerMask targetLayers;
-    private float homingStrength;
-    private Transform target;
-    private Transform shooter;
-    
-    public void Initialize(Vector3 direction, float speed, float dmg, bool crit, LayerMask layers, float homing, Transform shoot)
-    {
-        velocity = direction.normalized * speed;
-        damage = dmg;
-        isCrit = crit;
-        targetLayers = layers;
-        homingStrength = homing;
-        shooter = shoot;
-        
-        FindNearestTarget();
-        Destroy(gameObject, 10f);
-    }
-    
-    void FindNearestTarget()
-    {
-        Collider[] enemies = Physics.OverlapSphere(transform.position, 50f, targetLayers);
-        float closestDist = float.MaxValue;
-        
-        foreach (Collider col in enemies)
-        {
-            float dist = Vector3.Distance(transform.position, col.transform.position);
-            if (dist < closestDist)
+            // Point in direction of movement
+            if (velocity != Vector3.zero)
             {
-                closestDist = dist;
-                target = col.transform;
+                transform.rotation = Quaternion.LookRotation(velocity);
             }
         }
     }
     
-    void Update()
+    void FindHomingTarget()
     {
-        if (target != null)
-        {
-            Vector3 directionToTarget = (target.position - transform.position).normalized;
-            velocity = Vector3.Lerp(velocity, directionToTarget * velocity.magnitude, homingStrength * Time.deltaTime);
-        }
+        Collider[] hits = Physics.OverlapSphere(transform.position, system.GetHomingRange(), targetLayers);
         
-        transform.rotation = Quaternion.LookRotation(velocity);
-        
-        RaycastHit hit;
-        if (Physics.Raycast(transform.position, velocity.normalized, out hit, velocity.magnitude * Time.deltaTime, targetLayers))
+        float closestDist = float.MaxValue;
+        foreach (Collider hit in hits)
         {
-            Hit(hit);
-        }
-        else
-        {
-            transform.position += velocity * Time.deltaTime;
+            if (hit.transform == shooter) continue;
+            
+            float dist = Vector3.Distance(transform.position, hit.transform.position);
+            if (dist < closestDist)
+            {
+                closestDist = dist;
+                homingTarget = hit.transform;
+            }
         }
     }
     
-    void Hit(RaycastHit hit)
+    void OnTriggerEnter(Collider other)
     {
-        EnemyStats enemy = hit.collider.GetComponent<EnemyStats>();
-        if (enemy != null)
+        // Ignore shooter
+        if (other.transform == shooter || other.transform.IsChildOf(shooter))
         {
-            enemy.TakeDamage(damage, isCrit);
+            return;
         }
         
-        Destroy(gameObject);
+        // Check if hit valid target
+        if (((1 << other.gameObject.layer) & targetLayers) != 0)
+        {
+            // Deal damage
+            EnemyStats enemy = other.GetComponent<EnemyStats>();
+            if (enemy != null)
+            {
+                enemy.TakeDamage(damage, isCrit);
+                Debug.Log($"Projectile hit enemy for {damage:F0} damage" + (isCrit ? " (CRIT)" : ""));
+            }
+            
+            // Destroy projectile
+            Destroy(gameObject);
+        }
+        // Hit environment
+        else if (!other.isTrigger)
+        {
+            Debug.Log($"Projectile hit {other.name}");
+            Destroy(gameObject);
+        }
     }
 }
