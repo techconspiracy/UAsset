@@ -1,5 +1,5 @@
-// PlayerStats.cs - UPDATED VERSION
-// Fixed to use new ArmorType enum (Helmet, Chestplate, etc.)
+// PlayerStats.cs - FIXED VERSION
+// Now properly increases stats on level up
 
 using UnityEngine;
 using UnityEngine.UI;
@@ -16,6 +16,13 @@ public class PlayerStats : MonoBehaviour
     [SerializeField] private float baseArmor = 5f;
     [SerializeField] private float baseCritChance = 5f;
     
+    [Header("Stat Scaling Per Level")]
+    [SerializeField] private float healthPerLevel = 10f;
+    [SerializeField] private float manaPerLevel = 5f;
+    [SerializeField] private float damagePerLevel = 2f;
+    [SerializeField] private float armorPerLevel = 1f;
+    [SerializeField] private float critPerLevel = 0.5f;
+    
     [Header("Current Stats")]
     private float currentHealth;
     private float currentMana;
@@ -24,7 +31,7 @@ public class PlayerStats : MonoBehaviour
     private Weapon equippedWeapon;
     private Dictionary<ArmorType, Armor> equippedArmor = new Dictionary<ArmorType, Armor>();
     
-    [Header("UI References (Assign After Creating UI)")]
+    [Header("UI References")]
     [SerializeField] private Image healthBar;
     [SerializeField] private Image manaBar;
     [SerializeField] private TextMeshProUGUI levelText;
@@ -41,7 +48,7 @@ public class PlayerStats : MonoBehaviour
         currentMana = GetMaxMana();
         UpdateUI();
         
-        // TEMPORARY TEST CODE - Remove later
+        // TEMPORARY TEST CODE - Can remove this later
         makeItems generator = FindObjectOfType<makeItems>();
         InventoryManager inventory = GetComponent<InventoryManager>();
         
@@ -68,7 +75,8 @@ public class PlayerStats : MonoBehaviour
     
     public float GetMaxHealth()
     {
-        float totalHealth = baseMaxHealth + (level * 10);
+        // Base health + level scaling + equipment bonuses
+        float totalHealth = baseMaxHealth + (level * healthPerLevel);
         
         foreach (var armor in equippedArmor.Values)
         {
@@ -83,12 +91,13 @@ public class PlayerStats : MonoBehaviour
     
     public float GetMaxMana()
     {
-        return baseMaxMana + (level * 5);
+        return baseMaxMana + (level * manaPerLevel);
     }
     
     public float GetTotalDamage()
     {
-        float totalDamage = baseDamage + (level * 2);
+        // Base damage + level scaling + weapon bonus
+        float totalDamage = baseDamage + (level * damagePerLevel);
         
         if (equippedWeapon != null && equippedWeapon.stats != null)
         {
@@ -100,7 +109,8 @@ public class PlayerStats : MonoBehaviour
     
     public float GetTotalArmor()
     {
-        float totalArmor = baseArmor;
+        // Base armor + level scaling + equipment bonuses
+        float totalArmor = baseArmor + (level * armorPerLevel);
         
         foreach (var armor in equippedArmor.Values)
         {
@@ -115,7 +125,7 @@ public class PlayerStats : MonoBehaviour
     
     public float GetCritChance()
     {
-        float totalCrit = baseCritChance;
+        float totalCrit = baseCritChance + (level * critPerLevel);
         
         if (equippedWeapon != null && equippedWeapon.stats != null)
         {
@@ -195,7 +205,6 @@ public class PlayerStats : MonoBehaviour
     {
         if (armor.armorModel == null) return;
         
-        // Find the appropriate bone to attach to
         Transform targetBone = GetArmorAttachBone(armor.armorType);
         
         if (targetBone != null)
@@ -215,13 +224,12 @@ public class PlayerStats : MonoBehaviour
     
     Transform GetArmorAttachBone(ArmorType type)
     {
-        // Find bones in character rig
         Transform[] bones = GetComponentsInChildren<Transform>();
         
         switch (type)
         {
             case ArmorType.Helmet:
-                return FindBone(bones, "Head") ?? transform; // Fallback to root
+                return FindBone(bones, "Head") ?? transform;
                 
             case ArmorType.Chestplate:
                 return FindBone(bones, "Spine") ?? FindBone(bones, "Chest") ?? transform;
@@ -292,17 +300,17 @@ public class PlayerStats : MonoBehaviour
         
         if (levelText != null)
         {
-            levelText.text = $"Player Level : {level}";
+            levelText.text = $"Level {level}";
         }
         
         if (healthText != null)
         {
-            healthText.text = $"Health : {Mathf.Ceil(currentHealth)} / {GetMaxHealth()}";
+            healthText.text = $"HP: {Mathf.Ceil(currentHealth)} / {GetMaxHealth()}";
         }
         
         if (manaText != null)
         {
-            manaText.text = $"Mana : {Mathf.Ceil(currentMana)} / {GetMaxMana()}";
+            manaText.text = $"MP: {Mathf.Ceil(currentMana)} / {GetMaxMana()}";
         }
     }
     
@@ -316,10 +324,20 @@ public class PlayerStats : MonoBehaviour
         return currentHealth;
     }
     
-    // Called by ExperienceManager when leveling up
+    // ✅ FIXED: Called by ExperienceManager when leveling up
+    // Now actually increases base stats!
     public void OnLevelUp(int newLevel)
     {
+        int levelsGained = newLevel - level;
         level = newLevel;
+        
+        // ✅ ACTUALLY INCREASE BASE STATS
+        // These increases stack with the scaling in GetTotal...() methods
+        baseMaxHealth += healthPerLevel * levelsGained;
+        baseMaxMana += manaPerLevel * levelsGained;
+        baseDamage += damagePerLevel * levelsGained;
+        baseArmor += armorPerLevel * levelsGained;
+        baseCritChance += critPerLevel * levelsGained;
         
         // Heal to full on level up
         currentHealth = GetMaxHealth();
@@ -327,6 +345,10 @@ public class PlayerStats : MonoBehaviour
         
         UpdateUI();
         
-        Debug.Log($"Player leveled up to {level}! Stats increased!");
+        Debug.Log($"🎉 LEVEL UP to {level}!");
+        Debug.Log($"  Health: {GetMaxHealth():F0} (+{healthPerLevel * levelsGained:F0})");
+        Debug.Log($"  Damage: {GetTotalDamage():F0} (+{damagePerLevel * levelsGained:F0})");
+        Debug.Log($"  Armor: {GetTotalArmor():F0} (+{armorPerLevel * levelsGained:F0})");
+        Debug.Log($"  Crit Chance: {GetCritChance():F1}% (+{critPerLevel * levelsGained:F1}%)");
     }
 }
