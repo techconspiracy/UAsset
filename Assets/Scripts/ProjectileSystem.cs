@@ -151,7 +151,7 @@ public class ProjectileSystem : MonoBehaviour
         Destroy(shaft.GetComponent<Collider>());
         
         // Arrow tip
-        GameObject tip = GameObject.CreatePrimitive(PrimitiveType.Cone);
+        GameObject tip = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         tip.transform.SetParent(parent.transform);
         tip.transform.localPosition = new Vector3(0, 0, 0.35f);
         tip.transform.localRotation = Quaternion.Euler(0, 0, 0);
