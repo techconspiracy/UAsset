@@ -32,5 +32,35 @@ Create Animator Controller with parameters:
 - IsAttacking (bool)
 - AttackSpeed (float)
 
+## Script List
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/scriptList.txt
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/Architecture.md
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/cameraInputRelay.cs
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/CollectibleManager.cs
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/CollectibleObject.cs
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/CombatAnimationController.cs
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/ComponentVerificationTest.cs
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/DamageText.cs
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/EnemyStats.cs
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/EnemyWeaponHandler.cs
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/ExperienceManager.cs
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/gameTester.cs
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/InventoryManager.cs
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/InventorySlotUI.cs
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/InventoryUI.cs
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/LootDrop.cs
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/makeItems.cs
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/PlayerStats.cs
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/PlayerWeaponHandler.cs
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/ProceduralArmorModels.cs
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/ProceduralIconGenerator.cs
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/ProceduralWeaponModels.cs
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/ProjectileSystems.cs
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/RangedWeaponHandler.cs
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/ThirdPersonCamera.cs
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/ThirdPersonController.cs
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/WeaponGenerationDebug.cs
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/ProceduralCharacterRig.cs
+
 ## Bug Reports
 Please use GitHub Issues for bug reports and feature requests.
