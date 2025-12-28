@@ -1,3 +1,5 @@
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/scriptList.txt
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/Architecture.md
 https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/cameraInputRelay.cs
 https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/CollectibleManager.cs
 https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/CollectibleObject.cs
@@ -23,3 +25,4 @@ https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/S
 https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/ThirdPersonCamera.cs
 https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/ThirdPersonController.cs
 https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/WeaponGenerationDebug.cs
+https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/ProceduralCharacterRig.cs

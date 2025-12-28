@@ -257,7 +257,10 @@ public Weapon GenerateWeapon(int playerLevel)
         {
             armor.icon = iconGen.GenerateArmorIcon(armor);
         }
-        
+        ProceduralArmorModels armorModelGenerator = FindObjectOfType<ProceduralArmorModels>();
+        if (armorModelGenerator != null) {
+            armorModelGenerator.GenerateArmorModel(armor);
+        }
         return armor;
     }
     

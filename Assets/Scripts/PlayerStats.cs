@@ -1,5 +1,5 @@
-// PlayerStats.cs - FIXED VERSION
-// Now properly increases stats on level up
+// PlayerStats.cs - UPDATED FOR RIG SYSTEM
+// Now uses ProceduralCharacterRig for proper armor/weapon attachment
 
 using UnityEngine;
 using UnityEngine.UI;
@@ -31,6 +31,9 @@ public class PlayerStats : MonoBehaviour
     private Weapon equippedWeapon;
     private Dictionary<ArmorType, Armor> equippedArmor = new Dictionary<ArmorType, Armor>();
     
+    [Header("Character Rig")]
+    [SerializeField] private ProceduralCharacterRig characterRig;
+    
     [Header("UI References")]
     [SerializeField] private Image healthBar;
     [SerializeField] private Image manaBar;
@@ -41,6 +44,23 @@ public class PlayerStats : MonoBehaviour
     // Events
     public event System.Action OnDeath;
     public event System.Action<float, bool> OnTakeDamage;
+    
+    void Awake()
+    {
+        // Try to find character rig
+        if (characterRig == null)
+        {
+            characterRig = GetComponent<ProceduralCharacterRig>();
+        }
+        
+        // If no rig exists, generate one
+        if (characterRig == null)
+        {
+            characterRig = gameObject.AddComponent<ProceduralCharacterRig>();
+            characterRig.GenerateCompleteRig();
+            Debug.Log("✅ Auto-generated character rig for player");
+        }
+    }
     
     void Start()
     {
@@ -75,7 +95,6 @@ public class PlayerStats : MonoBehaviour
     
     public float GetMaxHealth()
     {
-        // Base health + level scaling + equipment bonuses
         float totalHealth = baseMaxHealth + (level * healthPerLevel);
         
         foreach (var armor in equippedArmor.Values)
@@ -96,7 +115,6 @@ public class PlayerStats : MonoBehaviour
     
     public float GetTotalDamage()
     {
-        // Base damage + level scaling + weapon bonus
         float totalDamage = baseDamage + (level * damagePerLevel);
         
         if (equippedWeapon != null && equippedWeapon.stats != null)
@@ -109,7 +127,6 @@ public class PlayerStats : MonoBehaviour
     
     public float GetTotalArmor()
     {
-        // Base armor + level scaling + equipment bonuses
         float totalArmor = baseArmor + (level * armorPerLevel);
         
         foreach (var armor in equippedArmor.Values)
@@ -161,8 +178,32 @@ public class PlayerStats : MonoBehaviour
     
     public void EquipWeapon(Weapon weapon)
     {
+        // Unequip old weapon model if exists
+        if (equippedWeapon != null && equippedWeapon.weaponModel != null)
+        {
+            equippedWeapon.weaponModel.SetActive(false);
+        }
+        
         equippedWeapon = weapon;
         Debug.Log($"Equipped weapon: {weapon.itemName} (+{weapon.stats.damage} damage)");
+        
+        // Attach weapon model to right hand using rig
+        if (weapon.weaponModel != null && characterRig != null)
+        {
+            Transform weaponBone = characterRig.GetWeaponBone();
+            if (weaponBone != null)
+            {
+                weapon.weaponModel.transform.SetParent(weaponBone);
+                weapon.weaponModel.transform.localPosition = Vector3.zero;
+                weapon.weaponModel.transform.localRotation = Quaternion.identity;
+                weapon.weaponModel.SetActive(true);
+                Debug.Log($"✅ Attached weapon to {weaponBone.name}");
+            }
+            else
+            {
+                Debug.LogWarning("⚠️ Weapon bone not found in character rig!");
+            }
+        }
         
         // Update combat systems
         CombatAnimationController combat = GetComponent<CombatAnimationController>();
@@ -182,85 +223,82 @@ public class PlayerStats : MonoBehaviour
     
     public void EquipArmor(Armor armor)
     {
-        if (armor != null)
+        if (armor == null) return;
+        
+        // Unequip old armor model if exists
+        if (equippedArmor.ContainsKey(armor.armorType))
         {
-            equippedArmor[armor.armorType] = armor;
-            
-            float newMaxHealth = GetMaxHealth();
-            if (currentHealth < newMaxHealth)
+            Armor oldArmor = equippedArmor[armor.armorType];
+            if (oldArmor != null && oldArmor.armorModel != null)
             {
-                currentHealth = Mathf.Min(currentHealth + armor.stats.health, newMaxHealth);
+                oldArmor.armorModel.SetActive(false);
             }
-            
-            Debug.Log($"Equipped armor: {armor.itemName} (+{armor.stats.armor} armor)");
-            
-            // Attach armor model to character
-            AttachArmorModel(armor);
-            
-            UpdateUI();
         }
+        
+        // Store new armor
+        equippedArmor[armor.armorType] = armor;
+        
+        // Update health if armor provides health bonus
+        float newMaxHealth = GetMaxHealth();
+        if (currentHealth < newMaxHealth)
+        {
+            currentHealth = Mathf.Min(currentHealth + armor.stats.health, newMaxHealth);
+        }
+        
+        Debug.Log($"Equipped armor: {armor.itemName} (+{armor.stats.armor} armor)");
+        
+        // Attach armor model using rig system
+        AttachArmorModel(armor);
+        
+        UpdateUI();
     }
     
     void AttachArmorModel(Armor armor)
     {
-        if (armor.armorModel == null) return;
+        if (armor.armorModel == null)
+        {
+            Debug.LogWarning($"⚠️ Armor {armor.itemName} has no model!");
+            return;
+        }
         
-        Transform targetBone = GetArmorAttachBone(armor.armorType);
+        if (characterRig == null)
+        {
+            Debug.LogError("❌ Character rig is missing! Cannot attach armor.");
+            return;
+        }
+        
+        // Get the correct bone for this armor type
+        Transform targetBone = characterRig.GetArmorBone(armor.armorType);
         
         if (targetBone != null)
         {
-            ProceduralArmorModels armorGen = FindObjectOfType<ProceduralArmorModels>();
-            if (armorGen != null)
-            {
-                armorGen.AttachArmorToBone(armor.armorModel, targetBone, armor.armorType);
-                Debug.Log($"Attached {armor.armorType} model to character");
-            }
+            // Attach armor to bone
+            armor.armorModel.transform.SetParent(targetBone);
+            armor.armorModel.transform.localPosition = GetArmorOffset(armor.armorType);
+            armor.armorModel.transform.localRotation = Quaternion.identity;
+            armor.armorModel.SetActive(true);
+            
+            Debug.Log($"✅ Attached {armor.armorType} to {targetBone.name}");
         }
         else
         {
-            Debug.LogWarning($"Could not find bone for {armor.armorType}");
+            Debug.LogWarning($"⚠️ Could not find bone for {armor.armorType}");
         }
     }
     
-    Transform GetArmorAttachBone(ArmorType type)
+    Vector3 GetArmorOffset(ArmorType type)
     {
-        Transform[] bones = GetComponentsInChildren<Transform>();
-        
-        switch (type)
+        // Fine-tune positioning for each armor type
+        return type switch
         {
-            case ArmorType.Helmet:
-                return FindBone(bones, "Head") ?? transform;
-                
-            case ArmorType.Chestplate:
-                return FindBone(bones, "Spine") ?? FindBone(bones, "Chest") ?? transform;
-                
-            case ArmorType.Leggings:
-                return FindBone(bones, "Hips") ?? FindBone(bones, "Pelvis") ?? transform;
-                
-            case ArmorType.Gloves:
-                return FindBone(bones, "RightHand") ?? transform;
-                
-            case ArmorType.Boots:
-                return FindBone(bones, "RightFoot") ?? FindBone(bones, "LeftFoot") ?? transform;
-                
-            case ArmorType.Shield:
-                return FindBone(bones, "LeftHand") ?? transform;
-                
-            default:
-                return transform;
-        }
-    }
-    
-    Transform FindBone(Transform[] bones, string boneName)
-    {
-        foreach (Transform bone in bones)
-        {
-            if (bone.name.Contains(boneName))
-            {
-                return bone;
-            }
-        }
-        return null;
+            ArmorType.Helmet => new Vector3(0, 0.1f, 0),
+            ArmorType.Chestplate => Vector3.zero,
+            ArmorType.Leggings => new Vector3(0, -0.1f, 0),
+            ArmorType.Boots => new Vector3(0, -0.05f, 0.05f),
+            ArmorType.Gloves => Vector3.zero,
+            ArmorType.Shield => new Vector3(-0.2f, 0, 0.1f),
+            _ => Vector3.zero
+        };
     }
     
     public Weapon GetEquippedWeapon()
@@ -283,7 +321,6 @@ public class PlayerStats : MonoBehaviour
     {
         Debug.Log("Player Died!");
         OnDeath?.Invoke();
-        // Add respawn logic here
     }
     
     void UpdateUI()
@@ -324,22 +361,17 @@ public class PlayerStats : MonoBehaviour
         return currentHealth;
     }
     
-    // ✅ FIXED: Called by ExperienceManager when leveling up
-    // Now actually increases base stats!
     public void OnLevelUp(int newLevel)
     {
         int levelsGained = newLevel - level;
         level = newLevel;
         
-        // ✅ ACTUALLY INCREASE BASE STATS
-        // These increases stack with the scaling in GetTotal...() methods
         baseMaxHealth += healthPerLevel * levelsGained;
         baseMaxMana += manaPerLevel * levelsGained;
         baseDamage += damagePerLevel * levelsGained;
         baseArmor += armorPerLevel * levelsGained;
         baseCritChance += critPerLevel * levelsGained;
         
-        // Heal to full on level up
         currentHealth = GetMaxHealth();
         currentMana = GetMaxMana();
         
