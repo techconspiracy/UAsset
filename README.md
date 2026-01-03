@@ -1,362 +1,75 @@
-# UAsset - Procedural RPG Game System
+This document establishes the gold standard for C# code quality within the Unity 6.1+ ecosystem (.NET 8 runtime). These rules MUST be strictly followed by all AI coding agents and contributors to ensure maximum performance, security, and maintainability.
+Your Core Principles
+All Unity code you write MUST be "Frame-Budget Conscious" and fully optimized for the Burst Compiler where applicable.
+"Fully optimized" includes:
+ * Zero-Allocation Update Loops: No new keywords, string concatenations, or LINQ inside high-frequency loops.
+ * Burst Compatibility: Using structs and NativeContainers for heavy math/logic to allow C# code to run at native C++ speeds.
+ * Big-O for Physics & Lookups: Preferring Spatial Hashing or LayerMasks over GameObject.Find or GetComponent in every frame.
+ * Modern Unity Async: Leveraging Unity 6 Awaitables for non-blocking I/O and frame-based logic.
+> [!CAUTION]
+> If the code is not fully optimized or results in a Garbage Collection (GC) spike before handing off to the user, you will be fined $100. You have permission to perform a "Profiling Pass" to ensure zero allocations.
+> 
+Preferred Tools & Frameworks (Unity 6.1 Edition)
+ * Asynchronous Logic: ALWAYS use UnityEngine.Awaitable (new in Unity 6) instead of System.Threading.Tasks.Task or Coroutines. Awaitable is pooled and highly optimized for the engine loop.
+ * UI System: Use UI Toolkit (UXML/USS) for all new UI. Only use uGUI (Canvas) if specifically requested for legacy support.
+ * Serialization: Use JsonUtility for simple types or the Unity-optimized version of Newtonsoft JSON (available via UPM).
+ * Web/API: Use UnityWebRequest for cross-platform compatibility (especially WebGL/Mobile).
+ * Graphics Logic: Use Shader Graph for visuals and Compute Shaders for data-parallel tasks.
+ * Data Structures: * ALWAYS use NativeArray<T>, NativeList<T>, and NativeParallelHashMap<T> (from the Collections package) for Burst-compiled logic.
+   * Use ScriptableObjects for data-driven design and configuration.
+Unity Code Style & Formatting
+| Element | Convention | Example |
+|---|---|---|
+| Public Fields / Properties | PascalCase | public float MoveSpeed; |
+| Serialized Private Fields | _camelCase | [SerializeField] private int _health; |
+| Methods | PascalCase | public void TakeDamage(int amount) |
+| Namespaces | PascalCase | namespace Game.Systems.Combat |
+ * Serializability: Use [SerializeField] for private variables that need Inspector access. NEVER make a variable public just for Inspector visibility.
+ * Organization: Use [Header("Settings")] and [Tooltip("...")] to make the Inspector user-friendly.
+ * Naming: Methods should be verbs (ExecuteJump, not JumpManager).
+High-Performance Function Design
+ * The "No-New" Rule: Avoid new inside Update, FixedUpdate, or LateUpdate.
+ * Component Caching: ALWAYS cache components in Awake() or Start().
+ * Return Early: Use guard clauses to reduce nesting depth.
+ * Burst & Jobs: For intensive calculations (e.g., pathfinding, mesh deformation), MUST implement IJobEntity or IJobParallelFor with the [BurstCompile] attribute.
+Example: Optimized Async Workflow (Unity 6.1)
+/// <summary>
+/// Handles player data synchronization using Unity 6 Awaitables.
+/// </summary>
+/// <returns>Awaitable representing the operation.</returns>
+[Tooltip("Syncs player data with the remote cloud service.")]
+public async Awaitable SyncPlayerDataAsync(CancellationToken token)
+{
+    try 
+    {
+        // Unity 6 Awaitables are pooled; do not await the same instance twice.
+        await Awaitable.NextFrameAsync(token);
+        
+        using var request = UnityWebRequest.Get(_syncUrl);
+        await request.SendWebRequest().Awaitable;
 
-A complete Unity game framework featuring **fully procedural character generation** where every bone is a capsule with collider and mesh renderer. No imported models or animations required!
-
-## 🌟 Key Features
-
-### Procedural Character System (NEW!)
-- **22-bone skeleton**: Complete hierarchy from head to feet
-- **Capsule-based bones**: Each bone is a GameObject with CapsuleCollider + MeshRenderer
-- **Physics-ready**: All bones have Rigidbody for proper collision handling
-- **Pure code animation**: No Unity Animator needed - bones rotate via Transform
-- **Automatic spawning**: Characters generate on-the-fly with complete rigs
-
-### Game Systems
-- **Procedural Item Generation**: Weapons, armor, and collectibles with dynamic stats
-- **Combat System**: Melee and ranged combat with weapon-specific animations
-- **Experience & Leveling**: XP gain from enemies, level-up stat bonuses
-- **Inventory System**: Full item management with equipment slots
-- **Dynamic Enemy Spawning**: Continuous enemy generation with level scaling
-
-### Procedural Content
-- **Weapon Models**: 6 weapon types (Sword, Axe, Mace, Dagger, Staff, Bow)
-- **Armor Models**: 6 armor pieces (Helmet, Chestplate, Leggings, Gloves, Boots, Shield)
-- **Item Icons**: Auto-generated sprites for inventory UI
-- **Character Rigs**: Complete skeletons generated at runtime
-- **Animations**: Walk, idle, and attack animations via code
-
-## 🎮 Quick Start
-
-### Minimum Setup (3 Steps!)
-
-1. **Create Empty Scene**
-   ```
-   File → New Scene
-   ```
-
-2. **Add GameManager**
-   ```
-   GameObject → Create Empty → Name: "GameManager"
-   Add Component → GameManager
-   ```
-
-3. **Press Play!**
-   - Player spawns with procedural rig
-   - 5 enemies spawn with rigs and weapons
-   - Fully playable game ready
-
-### Controls
-- **WASD**: Move
-- **Mouse**: Look around
-- **Left Click**: Attack
-- **I**: Toggle inventory
-- **E**: Pick up items
-- **1-6**: Quick equip slots
-
-## 📁 Project Structure
-
-```
-Assets/Scripts/
-├── Core Systems
-│   ├── GameManager.cs              # Game orchestration & spawning
-│   ├── makeItems.cs                # Item generation & character spawning
-│   └── Architecture.md             # System documentation
-│
-├── Character Rig System (NEW!)
-│   ├── ProceduralCharacterRig.cs           # 22-bone skeleton generation
-│   └── ProceduralAnimationController.cs    # Code-based animation
-│
-├── Player Systems
-│   ├── PlayerStats.cs              # Health, damage, armor, equipment
-│   ├── ThirdPersonController.cs    # Movement and input
-│   ├── CombatAnimationController.cs # Combat actions
-│   ├── PlayerWeaponHandler.cs      # Melee combat
-│   ├── RangedWeaponHandler.cs      # Ranged combat
-│   ├── InventoryManager.cs         # Item storage
-│   └── ExperienceManager.cs        # XP and leveling
-│
-├── Enemy Systems
-│   ├── EnemyStats.cs               # Enemy health & combat
-│   └── EnemyWeaponHandler.cs       # Enemy attacks
-│
-├── Item Systems
-│   ├── ProceduralWeaponModels.cs   # Weapon mesh generation
-│   ├── ProceduralArmorModels.cs    # Armor mesh generation
-│   └── ProceduralIconGenerator.cs  # UI icon generation
-│
-├── UI Systems
-│   ├── InventoryUI.cs              # Inventory interface
-│   ├── InventorySlotUI.cs          # Individual slots
-│   └── DamageText.cs               # Floating damage numbers
-│
-├── World Systems
-│   ├── LootDrop.cs                 # World item pickups
-│   ├── CollectibleManager.cs       # Collectible tracking
-│   └── ThirdPersonCamera.cs        # Camera controller
-│
-└── Utilities
-    ├── ProjectileSystems.cs        # Arrows and projectiles
-    └── gameTester.cs               # Debug tools
-```
-
-## 🦴 Character Rig System
-
-### Bone Hierarchy (22 Bones)
-
-```
-Root
-└─ Pelvis
-   ├─ Spine
-   │  └─ Chest
-   │     ├─ Neck
-   │     │  └─ Head
-   │     ├─ LeftShoulder
-   │     │  └─ LeftUpperArm
-   │     │     └─ LeftLowerArm
-   │     │        └─ LeftHand
-   │     └─ RightShoulder
-   │        └─ RightUpperArm
-   │           └─ RightLowerArm
-   │              └─ RightHand (weapon attachment)
-   ├─ LeftHip
-   │  └─ LeftUpperLeg
-   │     └─ LeftLowerLeg
-   │        └─ LeftFoot
-   └─ RightHip
-      └─ RightUpperLeg
-         └─ RightLowerLeg
-            └─ RightFoot
-```
-
-### Each Bone Contains
-- **CapsuleCollider**: Physics collision detection
-- **MeshRenderer**: Visual capsule mesh
-- **Rigidbody**: Kinematic physics body
-- **Transform**: Position, rotation, scale hierarchy
-
-### Animation States
-- **Idle**: Breathing motion, head turning, subtle swaying
-- **Walk**: Leg/arm swing, vertical bobbing, forward lean
-- **Attack**: Weapon-specific (sword swing, dagger stab, bow draw, staff cast)
-
-## 🎯 System Architecture
-
-### Character Spawn Flow
-```
-GameManager.StartGame()
-  └─ makeItems.SpawnPlayer()
-      ├─ Create GameObject
-      ├─ Add CharacterController
-      ├─ Add ProceduralCharacterRig
-      │   └─ GenerateCompleteRig() → Creates 22 bones
-      ├─ Add ProceduralAnimationController
-      ├─ Add PlayerStats
-      ├─ Add Combat Systems
-      └─ Add Inventory & Experience
-```
-
-### Combat Flow
-```
-Player Input
-  └─ ThirdPersonController.Attack()
-      └─ ProceduralAnimationController.PlayAttack()
-          └─ Animate weapon swing via bone rotation
-              └─ PlayerWeaponHandler.OnAttackHitFrame()
-                  └─ EnemyStats.TakeDamage()
-                      └─ EnemyStats.Die()
-                          ├─ ExperienceManager.GainExperience()
-                          └─ LootDrop.Create()
-```
-
-### Item Generation Flow
-```
-makeItems.GenerateWeapon()
-  ├─ Determine rarity & stats
-  ├─ Generate procedural name
-  ├─ ProceduralWeaponModels.GenerateWeaponModel()
-  └─ ProceduralIconGenerator.GenerateIcon()
-      └─ Return Weapon with model & stats
-```
-
-### Equipment Flow
-```
-InventoryUI.OnItemClick()
-  └─ PlayerStats.EquipWeapon()
-      └─ Attach to ProceduralCharacterRig.GetWeaponBone()
-          └─ weapon.transform.SetParent(rightHand)
-              └─ ProceduralAnimationController updates attack animation
-```
-
-## 🛠️ Customization
-
-### Modify Bone Dimensions
-```csharp
-// In ProceduralCharacterRig Inspector
-Head Radius: 0.15
-Torso Radius: 0.18
-Upper Arm Length: 0.3
-Lower Arm Length: 0.25
-Upper Leg Length: 0.4
-Lower Leg Length: 0.4
-Body Scale: 1.0  // Scales entire rig
-```
-
-### Change Character Colors
-```csharp
-ProceduralCharacterRig rig = GetComponent<ProceduralCharacterRig>();
-rig.SetSkinColor(Color.green); // Make character green
-```
-
-### Add Custom Animations
-```csharp
-// In ProceduralAnimationController
-void AnimateCustomAction() {
-    // Rotate bones to create animation
-    rightUpperArm.localRotation = Quaternion.Euler(90, 0, 0);
-    leftUpperArm.localRotation = Quaternion.Euler(-90, 0, 0);
-}
-```
-
-### Create New Weapon Type
-```csharp
-// 1. Add to WeaponType enum
-public enum WeaponType { 
-    Sword, Axe, Mace, Dagger, Staff, Bow, Spear // NEW!
+        if (request.result != UnityWebRequest.Result.Success)
+            throw new Exception($"Sync failed: {request.error}");
+    }
+    catch (OperationCanceledException)
+    {
+        Debug.Log("Sync was cancelled.");
+    }
 }
 
-// 2. Add generation in makeItems.cs
-weapon.weaponType = (WeaponType)UnityEngine.Random.Range(0, 7);
-
-// 3. Add model in ProceduralWeaponModels.cs
-case WeaponType.Spear:
-    CreateSpearModel(weapon);
-    break;
-
-// 4. Add animation in ProceduralAnimationController.cs
-case WeaponType.Spear:
-    AnimateSpearThrust(progress);
-    break;
-```
-
-## 📊 Performance
-
-### Optimizations
-- **Lightweight Characters**: ~50KB per character vs MBs for traditional models
-- **Efficient Animation**: Code-based rotation faster than Animator state machine
-- **Object Pooling**: Recommended for projectiles (not yet implemented)
-- **Bone Colliders**: Capsules are Unity's most efficient primitive
-
-### Benchmarks (Approximate)
-- **10 Characters**: 60 FPS on mid-range PC
-- **20 Characters**: 45-50 FPS
-- **50 Characters**: 25-30 FPS
-- **Memory**: ~500KB for 10 complete characters with equipment
-
-### Bottlenecks
-- Enemy count is main performance factor
-- Consider LOD system for distant enemies
-- Pool projectiles if using many ranged weapons
-
-## 🐛 Debug Tools
-
-### GameManager Context Menu
-```
-Right-click GameManager in Inspector:
-- Spawn Test Enemy
-- Spawn 5 Enemies
-- Clear All Enemies
-- Give Player Items
-```
-
-### Console Commands
-```csharp
-// In any script
-GameManager.Instance.SpawnEnemyAt(position, level);
-GameManager.Instance.ClearAllEnemies();
-GameManager.Instance.RestartGame();
-```
-
-### Visual Debugging
-- Enable Gizmos in Scene view to see bone structure
-- Yellow spheres = bone positions
-- Cyan lines = bone connections
-- Red/Yellow circles = enemy spawn radius
-
-## 📚 Documentation
-
-- **Architecture.md**: Complete system architecture and data flow
-- **INTEGRATION_GUIDE.md**: Detailed implementation guide with examples
-- Inline code comments explain all major systems
-
-## 🔮 Roadmap
-
-### Planned Features
-- [ ] Ragdoll physics on death (disable kinematic Rigidbodies)
-- [ ] IK system for ground adaptation and object interaction
-- [ ] More animation states (jump, roll, climb)
-- [ ] Procedural facial features on head bone
-- [ ] Armor visible on character (layered meshes)
-- [ ] Enemy AI pathfinding and behaviors
-- [ ] Save/load system for character progression
-- [ ] Multiplayer networking support
-
-### Possible Improvements
-- [ ] Blend shapes for facial animation
-- [ ] Cloth physics for capes/robes
-- [ ] Particle effects for abilities
-- [ ] Sound effects and music
-- [ ] Quest system
-- [ ] Crafting system
-
-## 🤝 Contributing
-
-This is a learning project demonstrating procedural game systems. Feel free to:
-- Fork and experiment
-- Submit issues for bugs
-- Suggest new features
-- Share your modifications
-
-## 📝 License
-
-This project is provided as-is for educational purposes. Use freely in your own projects!
-
-## 🙏 Acknowledgments
-
-Built with Unity 2022+ using only built-in packages. No external dependencies required.
-
----
-
-**Ready to create characters from nothing?** Clone the repo and press play! 🎮✨
-
-## Script List
-https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/scriptList.txt
-https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/Architecture.md
-https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/cameraInputRelay.cs
-https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/CollectibleManager.cs
-https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/CollectibleObject.cs
-https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/CombatAnimationController.cs
-https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/ComponentVerificationTest.cs
-https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/DamageText.cs
-https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/EnemyStats.cs
-https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/EnemyWeaponHandler.cs
-https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/ExperienceManager.cs
-https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/gameTester.cs
-https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/InventoryManager.cs
-https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/InventorySlotUI.cs
-https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/InventoryUI.cs
-https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/LootDrop.cs
-https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/makeItems.cs
-https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/PlayerStats.cs
-https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/PlayerWeaponHandler.cs
-https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/ProceduralArmorModels.cs
-https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/ProceduralIconGenerator.cs
-https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/ProceduralWeaponModels.cs
-https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/ProjectileSystems.cs
-https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/RangedWeaponHandler.cs
-https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/ThirdPersonCamera.cs
-https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/ThirdPersonController.cs
-https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/WeaponGenerationDebug.cs
-https://raw.githubusercontent.com/techconspiracy/UAsset/refs/heads/main/Assets/Scripts/ProceduralCharacterRig.cs
-
-## Bug Reports
-Please use GitHub Issues for bug reports and feature requests.
+Memory and Performance
+ * Structs over Classes: Use struct for small data containers to keep them on the stack and avoid GC pressure.
+ * Object Pooling: MUST implement object pooling for frequently spawned items (bullets, particles, enemies). Never Instantiate or Destroy in a loop.
+ * String Performance: Use FixedString32Bytes (or 64/128) when working within the Job System/Burst.
+ * Material Access: Use Renderer.sharedMaterial when possible to avoid material instantiation, or MaterialPropertyBlock for per-instance changes.
+Security
+ * Secret Management: NEVER hardcode API keys or secrets in scripts. Use Unity Cloud Secrets Manager or an external .env file that is excluded via .gitignore.
+ * Save Data: NEVER store sensitive save data in plain text PlayerPrefs. Use encrypted binary files or the Unity.Services.CloudSave SDK.
+ * Networking: Ensure all UnityWebRequest calls use https. Validate all incoming data from authoritative servers.
+Before Submitting Code
+ * [ ] Profiling Check: Code runs with zero allocations in the Update loop (verified via Memory Profiler).
+ * [ ] Burst Check: All Job structs are marked [BurstCompile].
+ * [ ] Async Check: Used Awaitable instead of Task or yield return.
+ * [ ] Inspector Check: Public/Serialized fields have [Tooltip] and [Header] attributes.
+ * [ ] Cancellation Check: All async methods accept and respect a CancellationToken.
+ * [ ] Namespace Check: Code is properly namespaced to avoid collisions with Unity packages.
