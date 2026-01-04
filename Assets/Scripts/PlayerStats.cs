@@ -1,5 +1,6 @@
-// PlayerStats.cs - UPDATED FOR RIG SYSTEM
-// Now uses ProceduralCharacterRig for proper armor/weapon attachment
+// PlayerStats.cs - COMPATIBLE VERSION
+// Works with OR WITHOUT ProceduralCharacterRig
+// No breaking changes to existing functionality
 
 using UnityEngine;
 using UnityEngine.UI;
@@ -31,9 +32,6 @@ public class PlayerStats : MonoBehaviour
     private Weapon equippedWeapon;
     private Dictionary<ArmorType, Armor> equippedArmor = new Dictionary<ArmorType, Armor>();
     
-    [Header("Character Rig")]
-    [SerializeField] private ProceduralCharacterRig characterRig;
-    
     [Header("UI References")]
     [SerializeField] private Image healthBar;
     [SerializeField] private Image manaBar;
@@ -45,20 +43,31 @@ public class PlayerStats : MonoBehaviour
     public event System.Action OnDeath;
     public event System.Action<float, bool> OnTakeDamage;
     
+    // Optional: Reference to procedural rig (if exists)
+    private ProceduralCharacterRig characterRig;
+    
     void Awake()
     {
-        // Try to find character rig
-        if (characterRig == null)
-        {
-            characterRig = GetComponent<ProceduralCharacterRig>();
-        }
+        // Try to find character rig (optional)
+        characterRig = GetComponent<ProceduralCharacterRig>();
         
-        // If no rig exists, generate one
-        if (characterRig == null)
+        // If makeItems wants us to have a rig and we don't have one yet
+        makeItems itemGen = FindObjectOfType<makeItems>();
+        if (itemGen != null)
         {
-            characterRig = gameObject.AddComponent<ProceduralCharacterRig>();
-            characterRig.GenerateCompleteRig();
-            Debug.Log("✅ Auto-generated character rig for player");
+            // Check via reflection if useProceduralRigs is true
+            var field = typeof(makeItems).GetField("useProceduralRigs", 
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (field != null)
+            {
+                bool useRigs = (bool)field.GetValue(itemGen);
+                if (useRigs && characterRig == null)
+                {
+                    // Add rig if system is enabled
+                    itemGen.AddProceduralRigToExistingCharacter(gameObject, false);
+                    characterRig = GetComponent<ProceduralCharacterRig>();
+                }
+            }
         }
     }
     
@@ -187,10 +196,11 @@ public class PlayerStats : MonoBehaviour
         equippedWeapon = weapon;
         Debug.Log($"Equipped weapon: {weapon.itemName} (+{weapon.stats.damage} damage)");
         
-        // Attach weapon model to right hand using rig
-        if (weapon.weaponModel != null && characterRig != null)
+        // Attach weapon model
+        if (weapon.weaponModel != null)
         {
-            Transform weaponBone = characterRig.GetWeaponBone();
+            Transform weaponBone = GetWeaponAttachPoint();
+            
             if (weaponBone != null)
             {
                 weapon.weaponModel.transform.SetParent(weaponBone);
@@ -201,7 +211,7 @@ public class PlayerStats : MonoBehaviour
             }
             else
             {
-                Debug.LogWarning("⚠️ Weapon bone not found in character rig!");
+                Debug.LogWarning("⚠️ No weapon attach point found!");
             }
         }
         
@@ -247,7 +257,7 @@ public class PlayerStats : MonoBehaviour
         
         Debug.Log($"Equipped armor: {armor.itemName} (+{armor.stats.armor} armor)");
         
-        // Attach armor model using rig system
+        // Attach armor model
         AttachArmorModel(armor);
         
         UpdateUI();
@@ -261,14 +271,7 @@ public class PlayerStats : MonoBehaviour
             return;
         }
         
-        if (characterRig == null)
-        {
-            Debug.LogError("❌ Character rig is missing! Cannot attach armor.");
-            return;
-        }
-        
-        // Get the correct bone for this armor type
-        Transform targetBone = characterRig.GetArmorBone(armor.armorType);
+        Transform targetBone = GetArmorAttachPoint(armor.armorType);
         
         if (targetBone != null)
         {
@@ -284,6 +287,76 @@ public class PlayerStats : MonoBehaviour
         {
             Debug.LogWarning($"⚠️ Could not find bone for {armor.armorType}");
         }
+    }
+    
+    // COMPATIBILITY: Get weapon attach point (works with or without rig)
+    Transform GetWeaponAttachPoint()
+    {
+        // Try procedural rig first
+        if (characterRig != null)
+        {
+            Transform weaponPoint = characterRig.weaponAttachPoint;
+            if (weaponPoint != null) return weaponPoint;
+            
+            Transform rightHand = characterRig.GetWeaponBone();
+            if (rightHand != null) return rightHand;
+        }
+        
+        // Fall back to searching for bones in children
+        Transform rightHand = FindBone("RightHand");
+        if (rightHand != null)
+        {
+            // Look for weapon attach point child
+            Transform weaponPoint = rightHand.Find("WeaponAttachPoint");
+            if (weaponPoint != null) return weaponPoint;
+            return rightHand;
+        }
+        
+        // Last resort: use this transform
+        return transform;
+    }
+    
+    // COMPATIBILITY: Get armor attach point (works with or without rig)
+    Transform GetArmorAttachPoint(ArmorType armorType)
+    {
+        // Try procedural rig first
+        if (characterRig != null)
+        {
+            Transform bone = characterRig.GetArmorBone(armorType);
+            if (bone != null) return bone;
+        }
+        
+        // Fall back to searching for bones by name
+        string boneName = armorType switch
+        {
+            ArmorType.Helmet => "Head",
+            ArmorType.Chestplate => "Chest",
+            ArmorType.Leggings => "Pelvis",
+            ArmorType.Gloves => "RightHand",
+            ArmorType.Boots => "RightFoot",
+            ArmorType.Shield => "LeftLowerArm",
+            _ => "Chest"
+        };
+        
+        Transform bone = FindBone(boneName);
+        if (bone != null) return bone;
+        
+        // Last resort: use this transform
+        return transform;
+    }
+    
+    // Helper to find bones (for non-rig characters)
+    Transform FindBone(string boneName)
+    {
+        Transform[] bones = GetComponentsInChildren<Transform>();
+        foreach (Transform bone in bones)
+        {
+            if (bone.name.Contains(boneName))
+            {
+                return bone;
+            }
+        }
+        return null;
     }
     
     Vector3 GetArmorOffset(ArmorType type)

@@ -1,6 +1,6 @@
-// ProceduralCharacterRig.cs
-// Complete procedural character rig system where each bone is a capsule
-// with collider and mesh renderer. Works for both players and enemies.
+// ProceduralCharacterRig.cs - FIXED VERSION
+// Now properly integrates with existing systems WITHOUT breaking changes
+// Auto-wires all references, maintains compatibility with existing scripts
 
 using UnityEngine;
 using System.Collections.Generic;
@@ -27,6 +27,14 @@ public class ProceduralCharacterRig : MonoBehaviour
     [SerializeField] private float upperLegLength = 0.4f;
     [SerializeField] private float lowerLegRadius = 0.08f;
     [SerializeField] private float lowerLegLength = 0.4f;
+    
+    [Header("Auto-Generated References")]
+    public Transform rightHandBone;
+    public Transform leftHandBone;
+    public Transform weaponAttachPoint;
+    public Transform headBone;
+    public Transform chestBone;
+    public Transform pelvisBone;
     
     // Bone references
     private Transform root;
@@ -62,17 +70,21 @@ public class ProceduralCharacterRig : MonoBehaviour
     
     void Awake()
     {
-        // Generate rig if it doesn't exist
+        // Only generate if no children exist (prevents re-generation)
         if (transform.childCount == 0)
         {
             GenerateCompleteRig();
+            AutoWireReferences();
+        }
+        else
+        {
+            // If rig already exists, just map the references
+            MapExistingRig();
         }
     }
     
     public void GenerateCompleteRig()
     {
-        Debug.Log($"🔨 Generating procedural character rig for {gameObject.name}");
-        
         // Clear existing children
         foreach (Transform child in transform)
         {
@@ -140,8 +152,6 @@ public class ProceduralCharacterRig : MonoBehaviour
         
         // Scale entire rig
         root.localScale = Vector3.one * bodyScale;
-        
-        Debug.Log($"✅ Character rig generated with {boneMap.Count} bones");
     }
     
     Transform CreateBone(string boneName, Vector3 localPos, Quaternion localRot, float radius, float height, Transform parent)
@@ -150,6 +160,7 @@ public class ProceduralCharacterRig : MonoBehaviour
         boneObj.transform.SetParent(parent);
         boneObj.transform.localPosition = localPos;
         boneObj.transform.localRotation = localRot;
+        boneObj.layer = parent.gameObject.layer; // Inherit layer from parent
         
         // Create capsule mesh
         GameObject capsule = GameObject.CreatePrimitive(PrimitiveType.Capsule);
@@ -158,6 +169,10 @@ public class ProceduralCharacterRig : MonoBehaviour
         capsule.transform.localPosition = Vector3.up * (height * 0.5f);
         capsule.transform.localRotation = Quaternion.identity;
         capsule.transform.localScale = new Vector3(radius * 2, height * 0.5f, radius * 2);
+        capsule.layer = parent.gameObject.layer;
+        
+        // Remove the default collider from the primitive (we'll add our own)
+        Destroy(capsule.GetComponent<Collider>());
         
         // Setup mesh renderer
         Renderer renderer = capsule.GetComponent<Renderer>();
@@ -167,7 +182,7 @@ public class ProceduralCharacterRig : MonoBehaviour
             renderer.material.color = skinColor;
         }
         
-        // Setup capsule collider on parent
+        // Setup capsule collider on parent bone
         CapsuleCollider collider = boneObj.AddComponent<CapsuleCollider>();
         collider.center = Vector3.up * (height * 0.5f);
         collider.radius = radius;
@@ -221,9 +236,76 @@ public class ProceduralCharacterRig : MonoBehaviour
         armorBones[ArmorType.Helmet] = head;
         armorBones[ArmorType.Chestplate] = chest;
         armorBones[ArmorType.Leggings] = pelvis;
-        armorBones[ArmorType.Gloves] = rightHand; // Could be both hands
-        armorBones[ArmorType.Boots] = rightFoot; // Could be both feet
+        armorBones[ArmorType.Gloves] = rightHand;
+        armorBones[ArmorType.Boots] = rightFoot;
         armorBones[ArmorType.Shield] = leftLowerArm;
+    }
+    
+    // AUTO-WIRE REFERENCES FOR EXISTING SYSTEMS
+    void AutoWireReferences()
+    {
+        // Set public references that other scripts can access
+        rightHandBone = rightHand;
+        leftHandBone = leftHand;
+        headBone = head;
+        chestBone = chest;
+        pelvisBone = pelvis;
+        
+        // Create weapon attach point
+        GameObject attachObj = new GameObject("WeaponAttachPoint");
+        attachObj.transform.SetParent(rightHand);
+        attachObj.transform.localPosition = new Vector3(0, 0.1f, 0);
+        attachObj.transform.localRotation = Quaternion.Euler(0, 0, 90);
+        weaponAttachPoint = attachObj.transform;
+        
+        // Wire up CombatAnimationController if it exists
+        CombatAnimationController combat = GetComponent<CombatAnimationController>();
+        if (combat != null)
+        {
+            // Use reflection to set private fields
+            var rightHandField = typeof(CombatAnimationController).GetField("rightHandBone", 
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var leftHandField = typeof(CombatAnimationController).GetField("leftHandBone", 
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var weaponPointField = typeof(CombatAnimationController).GetField("weaponAttachPoint", 
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            
+            if (rightHandField != null) rightHandField.SetValue(combat, rightHandBone);
+            if (leftHandField != null) leftHandField.SetValue(combat, leftHandBone);
+            if (weaponPointField != null) weaponPointField.SetValue(combat, weaponAttachPoint);
+            
+            Debug.Log("✅ Auto-wired CombatAnimationController references");
+        }
+        
+        Debug.Log("✅ Auto-wired all bone references");
+    }
+    
+    void MapExistingRig()
+    {
+        // If rig already exists, find and map bones
+        Transform[] children = GetComponentsInChildren<Transform>();
+        
+        foreach (Transform child in children)
+        {
+            string name = child.name;
+            
+            if (name.Contains("RightHand")) rightHandBone = child;
+            else if (name.Contains("LeftHand")) leftHandBone = child;
+            else if (name.Contains("Head")) headBone = child;
+            else if (name.Contains("Chest")) chestBone = child;
+            else if (name.Contains("Pelvis")) pelvisBone = child;
+            else if (name.Contains("WeaponAttachPoint")) weaponAttachPoint = child;
+        }
+        
+        // If weapon attach point doesn't exist, create it
+        if (weaponAttachPoint == null && rightHandBone != null)
+        {
+            GameObject attachObj = new GameObject("WeaponAttachPoint");
+            attachObj.transform.SetParent(rightHandBone);
+            attachObj.transform.localPosition = new Vector3(0, 0.1f, 0);
+            attachObj.transform.localRotation = Quaternion.Euler(0, 0, 90);
+            weaponAttachPoint = attachObj.transform;
+        }
     }
     
     // Public accessors
@@ -235,7 +317,7 @@ public class ProceduralCharacterRig : MonoBehaviour
     
     public Transform GetWeaponBone()
     {
-        return rightHand;
+        return rightHand != null ? rightHand : rightHandBone;
     }
     
     public Transform GetArmorBone(ArmorType armorType)
@@ -244,11 +326,11 @@ public class ProceduralCharacterRig : MonoBehaviour
         return bone;
     }
     
-    public Transform GetHead() => head;
-    public Transform GetChest() => chest;
-    public Transform GetPelvis() => pelvis;
-    public Transform GetLeftHand() => leftHand;
-    public Transform GetRightHand() => rightHand;
+    public Transform GetHead() => head != null ? head : headBone;
+    public Transform GetChest() => chest != null ? chest : chestBone;
+    public Transform GetPelvis() => pelvis != null ? pelvis : pelvisBone;
+    public Transform GetLeftHand() => leftHand != null ? leftHand : leftHandBone;
+    public Transform GetRightHand() => rightHand != null ? rightHand : rightHandBone;
     public Transform GetLeftFoot() => leftFoot;
     public Transform GetRightFoot() => rightFoot;
     
@@ -280,41 +362,6 @@ public class ProceduralCharacterRig : MonoBehaviour
             {
                 Gizmos.DrawWireSphere(bone.position, 0.05f);
             }
-        }
-        
-        // Draw bone connections
-        Gizmos.color = Color.cyan;
-        DrawBoneConnection(pelvis, spine);
-        DrawBoneConnection(spine, chest);
-        DrawBoneConnection(chest, neck);
-        DrawBoneConnection(neck, head);
-        
-        DrawBoneConnection(chest, leftShoulder);
-        DrawBoneConnection(leftShoulder, leftUpperArm);
-        DrawBoneConnection(leftUpperArm, leftLowerArm);
-        DrawBoneConnection(leftLowerArm, leftHand);
-        
-        DrawBoneConnection(chest, rightShoulder);
-        DrawBoneConnection(rightShoulder, rightUpperArm);
-        DrawBoneConnection(rightUpperArm, rightLowerArm);
-        DrawBoneConnection(rightLowerArm, rightHand);
-        
-        DrawBoneConnection(pelvis, leftHip);
-        DrawBoneConnection(leftHip, leftUpperLeg);
-        DrawBoneConnection(leftUpperLeg, leftLowerLeg);
-        DrawBoneConnection(leftLowerLeg, leftFoot);
-        
-        DrawBoneConnection(pelvis, rightHip);
-        DrawBoneConnection(rightHip, rightUpperLeg);
-        DrawBoneConnection(rightUpperLeg, rightLowerLeg);
-        DrawBoneConnection(rightLowerLeg, rightFoot);
-    }
-    
-    void DrawBoneConnection(Transform bone1, Transform bone2)
-    {
-        if (bone1 != null && bone2 != null)
-        {
-            Gizmos.DrawLine(bone1.position, bone2.position);
         }
     }
 }

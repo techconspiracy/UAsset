@@ -1,6 +1,6 @@
-// makeItems.cs - REFACTORED FOR PROCEDURAL RIG SYSTEM
-// Now integrates with ProceduralCharacterRig for proper character generation
-// Spawns both players and enemies with complete procedural rigs
+// makeItems.cs - COMPATIBLE VERSION
+// Works with existing systems WITHOUT breaking changes
+// Optional procedural rig - falls back to traditional setup if not used
 
 using UnityEngine;
 using System.Collections.Generic;
@@ -115,170 +115,10 @@ public class makeItems : MonoBehaviour
     public string[] daggerNames = { "Dagger", "Knife", "Shiv", "Dirk", "Stiletto" };
     public string[] staffNames = { "Staff", "Rod", "Wand", "Stave", "Scepter" };
     
-    [Header("Character Generation")]
+    [Header("Optional: Procedural Character System")]
+    [SerializeField] private bool useProceduralRigs = false;
     [SerializeField] private Color playerSkinColor = new Color(1f, 0.8f, 0.6f);
     [SerializeField] private Color enemySkinColor = new Color(0.5f, 0.7f, 0.5f);
-    
-    // Singleton pattern
-    private static makeItems instance;
-    public static makeItems Instance => instance;
-    
-    void Awake()
-    {
-        if (instance == null)
-        {
-            instance = this;
-        }
-        else
-        {
-            Destroy(gameObject);
-        }
-    }
-    
-    // ===== CHARACTER GENERATION =====
-    
-    public GameObject SpawnPlayer(Vector3 position)
-    {
-        GameObject player = new GameObject("Player");
-        player.transform.position = position;
-        player.tag = "Player";
-        player.layer = LayerMask.NameToLayer("Player");
-        
-        // Add CharacterController for movement
-        CharacterController controller = player.AddComponent<CharacterController>();
-        controller.radius = 0.3f;
-        controller.height = 1.8f;
-        controller.center = new Vector3(0, 0.9f, 0);
-        
-        // Generate procedural rig
-        ProceduralCharacterRig rig = player.AddComponent<ProceduralCharacterRig>();
-        rig.GenerateCompleteRig();
-        
-        // Set player skin color
-        rig.SetSkinColor(playerSkinColor);
-        
-        // Add animation controller
-        ProceduralAnimationController animator = player.AddComponent<ProceduralAnimationController>();
-        
-        // Add player stats
-        PlayerStats stats = player.AddComponent<PlayerStats>();
-        
-        // Add combat systems
-        CombatAnimationController combat = player.AddComponent<CombatAnimationController>();
-        PlayerWeaponHandler weaponHandler = player.AddComponent<PlayerWeaponHandler>();
-        RangedWeaponHandler rangedHandler = player.AddComponent<RangedWeaponHandler>();
-        
-        // Add inventory and experience
-        InventoryManager inventory = player.AddComponent<InventoryManager>();
-        ExperienceManager experience = player.AddComponent<ExperienceManager>();
-        
-        // Add movement controller
-        ThirdPersonController movement = player.AddComponent<ThirdPersonController>();
-        
-        Debug.Log($"✅ Spawned procedural player at {position}");
-        
-        return player;
-    }
-    
-    public GameObject SpawnEnemy(Vector3 position, int level = 1)
-    {
-        GameObject enemy = new GameObject($"Enemy_Lvl{level}");
-        enemy.transform.position = position;
-        enemy.tag = "Enemy";
-        enemy.layer = LayerMask.NameToLayer("Enemy");
-        
-        // Add CharacterController for movement
-        CharacterController controller = enemy.AddComponent<CharacterController>();
-        controller.radius = 0.3f;
-        controller.height = 1.8f;
-        controller.center = new Vector3(0, 0.9f, 0);
-        
-        // Generate procedural rig
-        ProceduralCharacterRig rig = enemy.AddComponent<ProceduralCharacterRig>();
-        rig.GenerateCompleteRig();
-        
-        // Set enemy skin color (slightly randomized)
-        Color skinVariation = enemySkinColor + new Color(
-            UnityEngine.Random.Range(-0.1f, 0.1f),
-            UnityEngine.Random.Range(-0.1f, 0.1f),
-            UnityEngine.Random.Range(-0.1f, 0.1f),
-            0
-        );
-        rig.SetSkinColor(skinVariation);
-        
-        // Add animation controller
-        ProceduralAnimationController animator = enemy.AddComponent<ProceduralAnimationController>();
-        
-        // Add enemy stats
-        EnemyStats stats = enemy.AddComponent<EnemyStats>();
-        
-        // Add combat systems
-        EnemyWeaponHandler weaponHandler = enemy.AddComponent<EnemyWeaponHandler>();
-        
-        // Generate and equip a weapon for the enemy
-        Weapon enemyWeapon = GenerateWeapon(level);
-        
-        // Attach weapon to enemy's hand
-        if (enemyWeapon.weaponModel != null)
-        {
-            Transform weaponBone = rig.GetWeaponBone();
-            if (weaponBone != null)
-            {
-                enemyWeapon.weaponModel.transform.SetParent(weaponBone);
-                enemyWeapon.weaponModel.transform.localPosition = Vector3.zero;
-                enemyWeapon.weaponModel.transform.localRotation = Quaternion.identity;
-                enemyWeapon.weaponModel.SetActive(true);
-            }
-        }
-        
-        // Add health bar UI
-        CreateEnemyHealthBar(enemy);
-        
-        Debug.Log($"✅ Spawned procedural enemy at {position} with {enemyWeapon.itemName}");
-        
-        return enemy;
-    }
-    
-    void CreateEnemyHealthBar(GameObject enemy)
-    {
-        // Create canvas for health bar
-        GameObject canvasObj = new GameObject("HealthBarCanvas");
-        canvasObj.transform.SetParent(enemy.transform);
-        canvasObj.transform.localPosition = new Vector3(0, 2.2f, 0);
-        
-        Canvas canvas = canvasObj.AddComponent<Canvas>();
-        canvas.renderMode = RenderMode.WorldSpace;
-        canvas.worldCamera = Camera.main;
-        
-        RectTransform canvasRect = canvasObj.GetComponent<RectTransform>();
-        canvasRect.sizeDelta = new Vector2(1, 0.2f);
-        
-        // Create background
-        GameObject bgObj = new GameObject("Background");
-        bgObj.transform.SetParent(canvasObj.transform);
-        UnityEngine.UI.Image bgImage = bgObj.AddComponent<UnityEngine.UI.Image>();
-        bgImage.color = new Color(0.2f, 0.2f, 0.2f, 0.8f);
-        
-        RectTransform bgRect = bgObj.GetComponent<RectTransform>();
-        bgRect.anchorMin = Vector2.zero;
-        bgRect.anchorMax = Vector2.one;
-        bgRect.sizeDelta = Vector2.zero;
-        
-        // Create health bar fill
-        GameObject fillObj = new GameObject("HealthFill");
-        fillObj.transform.SetParent(bgObj.transform);
-        UnityEngine.UI.Image fillImage = fillObj.AddComponent<UnityEngine.UI.Image>();
-        fillImage.color = Color.green;
-        fillImage.type = UnityEngine.UI.Image.Type.Filled;
-        fillImage.fillMethod = UnityEngine.UI.Image.FillMethod.Horizontal;
-        
-        RectTransform fillRect = fillObj.GetComponent<RectTransform>();
-        fillRect.anchorMin = Vector2.zero;
-        fillRect.anchorMax = Vector2.one;
-        fillRect.sizeDelta = new Vector2(-4, -4);
-    }
-    
-    // ===== ITEM GENERATION =====
     
     public Weapon GenerateWeapon(int playerLevel)
     {
@@ -438,5 +278,144 @@ public class makeItems : MonoBehaviour
         c.rarity = ItemRarity.Rare;
         
         return c;
+    }
+    
+    // OPTIONAL: Enhanced character spawning with procedural rigs
+    // Only use these if you want procedural characters
+    // Otherwise, use your existing player/enemy setup
+    
+    public void AddProceduralRigToExistingCharacter(GameObject character, bool isEnemy = false)
+    {
+        if (!useProceduralRigs) return;
+        
+        // Check if rig already exists
+        ProceduralCharacterRig existingRig = character.GetComponent<ProceduralCharacterRig>();
+        if (existingRig != null)
+        {
+            Debug.Log($"Character {character.name} already has a procedural rig");
+            return;
+        }
+        
+        // Add rig component
+        ProceduralCharacterRig rig = character.AddComponent<ProceduralCharacterRig>();
+        
+        // Generate the rig
+        rig.GenerateCompleteRig();
+        
+        // Set appropriate color
+        Color skinColor = isEnemy ? enemySkinColor : playerSkinColor;
+        if (isEnemy)
+        {
+            // Add slight variation for enemies
+            skinColor += new Color(
+                UnityEngine.Random.Range(-0.1f, 0.1f),
+                UnityEngine.Random.Range(-0.1f, 0.1f),
+                UnityEngine.Random.Range(-0.1f, 0.1f),
+                0
+            );
+        }
+        rig.SetSkinColor(skinColor);
+        
+        Debug.Log($"✅ Added procedural rig to {character.name}");
+    }
+    
+    public GameObject CreateProceduralPlayer(Vector3 position)
+    {
+        if (!useProceduralRigs)
+        {
+            Debug.LogWarning("Procedural rigs disabled. Enable 'Use Procedural Rigs' in makeItems component.");
+            return null;
+        }
+        
+        GameObject player = new GameObject("Player");
+        player.transform.position = position;
+        player.tag = "Player";
+        
+        // Add CharacterController
+        CharacterController controller = player.AddComponent<CharacterController>();
+        controller.radius = 0.3f;
+        controller.height = 1.8f;
+        controller.center = new Vector3(0, 0.9f, 0);
+        
+        // Add procedural rig
+        ProceduralCharacterRig rig = player.AddComponent<ProceduralCharacterRig>();
+        rig.GenerateCompleteRig();
+        rig.SetSkinColor(playerSkinColor);
+        
+        // Add standard player components
+        player.AddComponent<PlayerStats>();
+        player.AddComponent<InventoryManager>();
+        player.AddComponent<ExperienceManager>();
+        player.AddComponent<ThirdPersonController>();
+        player.AddComponent<CombatAnimationController>();
+        player.AddComponent<PlayerWeaponHandler>();
+        player.AddComponent<RangedWeaponHandler>();
+        
+        // Add optional procedural animator
+        if (player.GetComponent<ProceduralAnimationController>() == null)
+        {
+            player.AddComponent<ProceduralAnimationController>();
+        }
+        
+        Debug.Log($"✅ Created procedural player at {position}");
+        return player;
+    }
+    
+    public GameObject CreateProceduralEnemy(Vector3 position, int level = 1)
+    {
+        if (!useProceduralRigs)
+        {
+            Debug.LogWarning("Procedural rigs disabled. Enable 'Use Procedural Rigs' in makeItems component.");
+            return null;
+        }
+        
+        GameObject enemy = new GameObject($"Enemy_Lvl{level}");
+        enemy.transform.position = position;
+        enemy.tag = "Enemy";
+        
+        // Add CharacterController
+        CharacterController controller = enemy.AddComponent<CharacterController>();
+        controller.radius = 0.3f;
+        controller.height = 1.8f;
+        controller.center = new Vector3(0, 0.9f, 0);
+        
+        // Add procedural rig
+        ProceduralCharacterRig rig = enemy.AddComponent<ProceduralCharacterRig>();
+        rig.GenerateCompleteRig();
+        
+        Color skinColor = enemySkinColor + new Color(
+            UnityEngine.Random.Range(-0.1f, 0.1f),
+            UnityEngine.Random.Range(-0.1f, 0.1f),
+            UnityEngine.Random.Range(-0.1f, 0.1f),
+            0
+        );
+        rig.SetSkinColor(skinColor);
+        
+        // Add standard enemy components
+        enemy.AddComponent<EnemyStats>();
+        enemy.AddComponent<EnemyWeaponHandler>();
+        
+        // Add optional procedural animator
+        if (enemy.GetComponent<ProceduralAnimationController>() == null)
+        {
+            enemy.AddComponent<ProceduralAnimationController>();
+        }
+        
+        // Generate and equip weapon
+        Weapon enemyWeapon = GenerateWeapon(level);
+        if (enemyWeapon.weaponModel != null)
+        {
+            Transform weaponBone = rig.GetWeaponBone();
+            if (weaponBone != null)
+            {
+                enemyWeapon.weaponModel.transform.SetParent(weaponBone);
+                enemyWeapon.weaponModel.transform.localPosition = Vector3.zero;
+                enemyWeapon.weaponModel.transform.localRotation = Quaternion.identity;
+                enemyWeapon.weaponModel.SetActive(true);
+            }
+        }
+        
+        Debug.Log($"✅ Created procedural enemy at {position}");
+        return enemy;
     }
 }
